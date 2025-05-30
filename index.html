@@ -27,6 +27,15 @@
             min-height: 100vh;
         }
 
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                gap: 15px;
+                padding: 10px;
+            }
+        }
+
         .card {
             background: white;
             border-radius: 12px;
@@ -48,6 +57,25 @@
         .right-panel {
             width: 480px;
             padding: 16px;
+        }
+
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            .left-panel {
+                width: 100%;
+                padding: 12px;
+            }
+
+            .center-panel {
+                width: 100%;
+                min-width: unset;
+                padding: 12px;
+            }
+
+            .right-panel {
+                width: 100%;
+                padding: 12px;
+            }
         }
 
         .section-title {
@@ -130,6 +158,31 @@
             font-size: 9px;
         }
 
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            .timeline-container {
+                padding: 8px;
+                max-height: 50vh;
+            }
+
+            .timeline-content {
+                width: calc(100vw - 120px);
+                max-width: 300px;
+                padding: 8px;
+                font-size: 12px;
+            }
+
+            .timeline-time {
+                width: 70px;
+                font-size: 8px;
+            }
+
+            .timeline-marker {
+                width: 15px;
+                font-size: 12px;
+            }
+        }
+
         .block-management-header {
             background: #f1f5f9;
             padding: 10px;
@@ -140,6 +193,12 @@
             font-weight: bold;
         }
 
+        .header-pin { width: 20px; text-align: center; }
+        .header-name { width: 120px; text-align: center; }
+        .header-color { width: 60px; text-align: center; }
+        .header-time { width: 100px; text-align: center; }
+        .header-delete { width: 60px; text-align: center; }
+
         .block-row {
             display: flex;
             align-items: center;
@@ -148,6 +207,68 @@
             border-bottom: 1px solid #e5e7eb;
             cursor: move;
             transition: all 0.2s ease;
+        }
+
+        /* モバイル対応 */
+        @media (max-width: 768px) {
+            .block-management-header {
+                padding: 8px;
+                font-size: 11px;
+            }
+
+            .block-management-header > div {
+                font-size: 10px !important;
+            }
+
+            .header-pin { width: 15px; }
+            .header-name { width: 80px; }
+            .header-color { width: 40px; }
+            .header-time { width: 70px; }
+            .header-delete { width: 40px; }
+
+            .block-row {
+                gap: 5px;
+                padding: 6px 3px;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+
+            .drag-handle {
+                width: 15px;
+                height: 35px;
+                font-size: 10px;
+            }
+
+            .block-name-input {
+                width: 80px;
+                height: 35px;
+                font-size: 11px;
+                padding: 3px;
+            }
+
+            .color-button {
+                width: 40px;
+                height: 35px;
+                font-size: 16px;
+            }
+
+            .time-input-small {
+                width: 70px;
+                height: 35px;
+                font-size: 11px;
+                padding: 3px;
+            }
+
+            .delete-btn {
+                width: 40px;
+                height: 35px;
+                font-size: 14px;
+            }
+
+            .blocks-container {
+                max-height: 40vh;
+                padding-right: 5px;
+            }
         }
 
         .block-row:hover {
@@ -399,6 +520,67 @@
         .export-btn:hover {
             background: #047857;
         }
+
+        /* モバイル対応 - 入力フィールドとボタン */
+        @media (max-width: 768px) {
+            .time-input {
+                width: 120px;
+                height: 35px;
+                font-size: 14px;
+            }
+
+            .time-display {
+                font-size: 18px;
+            }
+
+            .section-title {
+                font-size: 14px;
+                margin-bottom: 12px;
+            }
+
+            .stat-card {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+
+            .stat-header {
+                font-size: 12px;
+                margin-bottom: 8px;
+            }
+
+            .add-block-btn {
+                height: 45px;
+                font-size: 14px;
+            }
+
+            .export-btn {
+                height: 40px;
+                font-size: 13px;
+            }
+
+            /* モーダルのモバイル対応 */
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+                padding: 15px;
+                max-height: 85%;
+            }
+
+            .modal-title {
+                font-size: 16px;
+            }
+
+            .output-textarea {
+                height: 300px;
+                font-size: 12px;
+                padding: 10px;
+            }
+
+            .copy-btn {
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -471,11 +653,11 @@
             <div id="limitWarning" style="display: none;"></div>
             
             <div class="block-management-header">
-                <div style="width: 20px; text-align: center;">📌</div>
-                <div style="width: 120px; text-align: center;">ブロック名</div>
-                <div style="width: 60px; text-align: center;">カラー</div>
-                <div style="width: 100px; text-align: center;">時間</div>
-                <div style="width: 60px; text-align: center;">削除</div>
+                <div class="header-pin">📌</div>
+                <div class="header-name">ブロック名</div>
+                <div class="header-color">カラー</div>
+                <div class="header-time">時間</div>
+                <div class="header-delete">削除</div>
             </div>
 
             <div class="blocks-container" id="blocksContainer">
@@ -922,13 +1104,16 @@
                     
                     const line = document.createElement('div');
                     line.className = 'target-marker';
-                    line.style.width = '450px';
+                    // モバイル対応: 画面幅に応じて調整
+                    const isMobile = window.innerWidth <= 768;
+                    line.style.width = isMobile ? 'calc(100vw - 120px)' : '450px';
+                    line.style.maxWidth = isMobile ? '300px' : '450px';
                     
                     const timeDisplay = document.createElement('div');
                     timeDisplay.className = 'timeline-time';
                     timeDisplay.style.color = '#16a34a';
                     timeDisplay.style.fontWeight = 'bold';
-                    timeDisplay.style.width = '90px';
+                    timeDisplay.style.width = isMobile ? '70px' : '90px';
                     timeDisplay.style.textAlign = 'center';
                     timeDisplay.textContent = targetTimeClock;
                     
@@ -976,13 +1161,16 @@
                 
                 const line = document.createElement('div');
                 line.className = 'target-marker';
-                line.style.width = '450px';
+                // モバイル対応: 画面幅に応じて調整
+                const isMobile = window.innerWidth <= 768;
+                line.style.width = isMobile ? 'calc(100vw - 120px)' : '450px';
+                line.style.maxWidth = isMobile ? '300px' : '450px';
                 
                 const timeDisplay = document.createElement('div');
                 timeDisplay.className = 'timeline-time';
                 timeDisplay.style.color = '#16a34a';
                 timeDisplay.style.fontWeight = 'bold';
-                timeDisplay.style.width = '90px';
+                timeDisplay.style.width = isMobile ? '70px' : '90px';
                 timeDisplay.style.textAlign = 'center';
                 timeDisplay.textContent = targetTimeClock;
                 
@@ -1206,6 +1394,15 @@
                 if (event.key === 'Escape') {
                     hideTextOutput();
                 }
+            });
+            
+            // ウィンドウリサイズ時にタイムラインを再描画（モバイル対応）
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    buildTimelineDisplay();
+                }, 200);
             });
             
             updateAll();
