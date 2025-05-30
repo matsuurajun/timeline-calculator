@@ -290,6 +290,115 @@
             color: #991b1b;
             font-size: 14px;
         }
+
+        /* テキスト出力モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            color: #374151;
+        }
+
+        .output-textarea {
+            width: 100%;
+            height: 400px;
+            padding: 15px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            resize: vertical;
+            background-color: #f9fafb;
+        }
+
+        .copy-btn {
+            background: #16a34a;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #15803d;
+        }
+
+        .copy-btn:active {
+            background: #166534;
+        }
+
+        .export-btn {
+            width: 100%;
+            height: 45px;
+            background: #059669;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .export-btn:hover {
+            background: #047857;
+        }
     </style>
 </head>
 <body>
@@ -342,6 +451,11 @@
                 </div>
                 <div id="blockCount" class="time-display">7</div>
             </div>
+
+            <button class="export-btn" onclick="showTextOutput()">
+                <span class="icon">📄</span>
+                テキスト出力
+            </button>
         </div>
 
         <!-- 中央パネル -->
@@ -379,6 +493,18 @@
             <button class="add-block-btn" id="addBlockBtn" onclick="addBlock()">
                 <span class="icon">➕</span> ブロック追加
             </button>
+        </div>
+    </div>
+
+    <!-- テキスト出力モーダル -->
+    <div id="textOutputModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📄 タイムライン テキスト出力</div>
+                <button class="close-btn" onclick="hideTextOutput()">&times;</button>
+            </div>
+            <textarea id="outputTextarea" class="output-textarea" readonly></textarea>
+            <button class="copy-btn" onclick="copyToClipboard()">📋 クリップボードにコピー</button>
         </div>
     </div>
 
@@ -951,6 +1077,139 @@
             container.appendChild(blockDiv);
         }
 
+        // テキスト出力機能
+        function generateTimelineText() {
+            const totalSeconds = blocksData.reduce((sum, b) => sum + (b.duration_sec || 0), 0);
+            const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
+            const startTime = document.getElementById('startTime').value;
+            const diffSeconds = totalSeconds - targetSeconds;
+            
+            let output = '';
+            output += '=====================================\n';
+            output += '        番組尺計算タイムライン\n';
+            output += '=====================================\n\n';
+            
+            // 基本情報
+            output += '■ 基本情報\n';
+            output += `開始時刻: ${startTime}\n`;
+            output += `目標時間: ${document.getElementById('targetTime').value}\n`;
+            output += `合計時間: ${secondsToHHMMSS(totalSeconds)}\n`;
+            output += `目標との差: ${secondsToHHMMSS(Math.abs(diffSeconds))} `;
+            if (diffSeconds > 0) {
+                output += '(超過)\n';
+            } else if (diffSeconds < 0) {
+                output += '(不足)\n';
+            } else {
+                output += '(ぴったり)\n';
+            }
+            output += `ブロック数: ${blocksData.length}個\n\n`;
+            
+            // タイムライン詳細
+            output += '■ タイムライン詳細\n';
+            output += '-----------------------------------\n';
+            
+            let currentPosition = 0;
+            blocksData.forEach((block, index) => {
+                const blockDurationSec = block.duration_sec || 0;
+                const blockStartTime = addSecondsToTime(startTime, currentPosition);
+                const blockEndTime = addSecondsToTime(startTime, currentPosition + blockDurationSec);
+                const isOverTarget = currentPosition >= targetSeconds && targetSeconds > 0;
+                
+                output += `${(index + 1).toString().padStart(2, '0')}. ${block.name}\n`;
+                output += `    時間: ${secondsToHHMMSS(blockDurationSec)}\n`;
+                output += `    開始: ${blockStartTime} → 終了: ${blockEndTime}\n`;
+                output += `    色: ${block.color_name}\n`;
+                if (isOverTarget) {
+                    output += `    ⚠️ 目標時間超過\n`;
+                }
+                output += '\n';
+                
+                currentPosition += blockDurationSec;
+            });
+            
+            // 目標時間マーカー
+            if (targetSeconds > 0) {
+                const targetTimeClock = addSecondsToTime(startTime, targetSeconds);
+                output += '-----------------------------------\n';
+                output += `🎯 目標時間: ${targetTimeClock}\n`;
+                output += '-----------------------------------\n\n';
+            }
+            
+            // 統計情報
+            output += '■ 統計情報\n';
+            const colorCounts = {};
+            blocksData.forEach(block => {
+                colorCounts[block.color_name] = (colorCounts[block.color_name] || 0) + 1;
+            });
+            
+            Object.entries(colorCounts).forEach(([color, count]) => {
+                output += `${color}: ${count}個\n`;
+            });
+            
+            output += '\n';
+            output += `生成日時: ${new Date().toLocaleString('ja-JP')}\n`;
+            output += '=====================================';
+            
+            return output;
+        }
+
+        function showTextOutput() {
+            const modal = document.getElementById('textOutputModal');
+            const textarea = document.getElementById('outputTextarea');
+            
+            textarea.value = generateTimelineText();
+            modal.style.display = 'block';
+            
+            // モーダル外クリックで閉じる
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    hideTextOutput();
+                }
+            };
+        }
+
+        function hideTextOutput() {
+            const modal = document.getElementById('textOutputModal');
+            modal.style.display = 'none';
+        }
+
+        function copyToClipboard() {
+            const textarea = document.getElementById('outputTextarea');
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // モバイル対応
+            
+            try {
+                document.execCommand('copy');
+                
+                // コピー成功フィードバック
+                const copyBtn = document.querySelector('.copy-btn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ コピーしました！';
+                copyBtn.style.background = '#16a34a';
+                
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.background = '#16a34a';
+                }, 2000);
+                
+            } catch (err) {
+                // フォールバック: 新しいAPI
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(textarea.value).then(() => {
+                        const copyBtn = document.querySelector('.copy-btn');
+                        const originalText = copyBtn.textContent;
+                        copyBtn.textContent = '✅ コピーしました！';
+                        
+                        setTimeout(() => {
+                            copyBtn.textContent = originalText;
+                        }, 2000);
+                    });
+                } else {
+                    alert('コピーに失敗しました。手動でテキストを選択してコピーしてください。');
+                }
+            }
+        }
+
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             const targetTimeInput = document.getElementById('targetTime');
@@ -963,6 +1222,13 @@
             if (startTimeInput) {
                 startTimeInput.addEventListener('blur', onStartTimeChange);
             }
+            
+            // ESCキーでモーダルを閉じる
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    hideTextOutput();
+                }
+            });
             
             updateAll();
         });
