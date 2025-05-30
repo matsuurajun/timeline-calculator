@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>番組尺計算タイムライン</title>
+    <!-- セキュリティ対策: CSP設定 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
     <style>
         * {
             box-sizing: border-box;
@@ -146,6 +148,40 @@
             gap: 10px;
             padding: 8px 5px;
             border-bottom: 1px solid #e5e7eb;
+            cursor: move;
+            transition: all 0.2s ease;
+        }
+
+        .block-row:hover {
+            background-color: #f8f9fa;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .block-row.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .block-row.drag-over {
+            border-top: 3px solid #2563eb;
+            background-color: #eff6ff;
+        }
+
+        .drag-handle {
+            width: 20px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            cursor: move;
+            font-size: 12px;
+        }
+
+        .drag-handle:hover {
+            color: #6b7280;
         }
 
         .block-name-input {
@@ -212,46 +248,13 @@
             margin-top: 10px;
         }
 
-        /* ドラッグ&ドロップ関連のスタイル */
-        .block-row {
-            cursor: move;
-            transition: all 0.2s ease;
-        }
-
-        .block-row:hover {
-            background-color: #f8f9fa;
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .block-row.dragging {
-            opacity: 0.5;
-            transform: rotate(2deg);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .block-row.drag-over {
-            border-top: 3px solid #2563eb;
-            background-color: #eff6ff;
-        }
-
-        .drag-handle {
-            width: 20px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #9ca3af;
-            cursor: move;
-            font-size: 12px;
-        }
-
-        .drag-handle:hover {
-            color: #6b7280;
-        }
-
         .add-block-btn:hover {
             background: #1d4ed8;
+        }
+
+        .add-block-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
         }
 
         .target-marker {
@@ -278,6 +281,26 @@
             height: 20px;
             display: inline-block;
         }
+
+        /* パフォーマンス警告 */
+        .performance-warning {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            color: #92400e;
+        }
+
+        /* ロード制限警告 */
+        .limit-warning {
+            background: #fee2e2;
+            border: 1px solid #dc2626;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            color: #991b1b;
+        }
     </style>
 </head>
 <body>
@@ -296,7 +319,7 @@
                     <span class="icon">⏰</span>
                     開始時刻
                 </div>
-                <input type="text" id="startTime" class="time-input" value="20:00:00">
+                <input type="text" id="startTime" class="time-input" value="20:00:00" maxlength="8">
             </div>
 
             <div class="stat-card" style="background: #f0fdf4;">
@@ -304,7 +327,7 @@
                     <span class="icon">🏁</span>
                     目標時間
                 </div>
-                <input type="text" id="targetTime" class="time-input" value="00:50:00">
+                <input type="text" id="targetTime" class="time-input" value="00:50:00" maxlength="8">
             </div>
 
             <div class="stat-card">
@@ -322,6 +345,15 @@
                 </div>
                 <div id="diffTime" class="time-display success">00:00:00</div>
             </div>
+
+            <!-- パフォーマンス情報 -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="icon">📈</span>
+                    ブロック数
+                </div>
+                <div id="blockCount" class="time-display">7</div>
+            </div>
         </div>
 
         <!-- 中央パネル -->
@@ -330,6 +362,7 @@
                 <span class="icon">📈</span>
                 タイムライン
             </div>
+            <div id="performanceWarning" style="display: none;"></div>
             <div class="timeline-container" id="timelineContainer">
                 <!-- タイムライン内容がここに動的生成される -->
             </div>
@@ -341,6 +374,8 @@
                 <span class="icon">✏️</span>
                 ブロック管理
             </div>
+            
+            <div id="limitWarning" style="display: none;"></div>
             
             <div class="block-management-header">
                 <div style="width: 20px; text-align: center;">📌</div>
@@ -354,17 +389,28 @@
                 <!-- ブロック一覧がここに動的生成される -->
             </div>
 
-            <button class="add-block-btn" onclick="addBlock()">
+            <button class="add-block-btn" id="addBlockBtn" onclick="addBlock()">
                 <span class="icon">➕</span> ブロック追加
             </button>
         </div>
     </div>
 
     <script>
+        "use strict"; // strictモードでより安全な実行
+
+        // セキュリティ・パフォーマンス設定
+        const SECURITY_CONFIG = {
+            MAX_BLOCKS: 100,           // 最大ブロック数
+            MAX_NAME_LENGTH: 50,       // ブロック名最大文字数
+            MAX_DURATION_HOURS: 24,    // 最大時間（時間）
+            PERFORMANCE_WARNING_THRESHOLD: 50, // パフォーマンス警告しきい値
+            UPDATE_THROTTLE_MS: 100    // 更新スロットル（ミリ秒）
+        };
+
         // 色の定義
         const COLOR_OPTIONS = {
             "明るいピンク": "#FFD1D1",
-            "クリーム": "#FFFF99",
+            "クリーム": "#FFFF99", 
             "明るい青緑": "#CBF266",
             "明るい空色": "#B4EBFA",
             "ベージュ": "#EDC58F",
@@ -392,23 +438,62 @@
         let draggedElement = null;
         let draggedIndex = -1;
 
-        // 時間変換ユーティリティ
+        // パフォーマンス制御
+        let updateTimeoutId = null;
+
+        // セキュリティ: 入力サニタイゼーション
+        function sanitizeString(str) {
+            if (typeof str !== 'string') return '';
+            return str
+                .replace(/[<>&"']/g, function(match) {
+                    const map = {
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '&': '&amp;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    };
+                    return map[match];
+                })
+                .substring(0, SECURITY_CONFIG.MAX_NAME_LENGTH);
+        }
+
+        // セキュリティ: 時間入力の検証
+        function validateTimeInput(timeStr) {
+            if (typeof timeStr !== 'string') return false;
+            
+            // 基本的な形式チェック
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5]?[0-9]):([0-5]?[0-9])$/;
+            if (!timeRegex.test(timeStr)) return false;
+            
+            // 最大時間チェック
+            const seconds = hhmmssToSeconds(timeStr);
+            return seconds <= SECURITY_CONFIG.MAX_DURATION_HOURS * 3600;
+        }
+
+        // 時間変換ユーティリティ（セキュリティ強化版）
         function hhmmssToSeconds(timeStr) {
-            const parts = timeStr.split(':').map(Number);
+            if (!validateTimeInput(timeStr)) return 0;
+            
+            const parts = timeStr.split(':').map(num => {
+                const parsed = parseInt(num, 10);
+                return isNaN(parsed) ? 0 : parsed;
+            });
+            
             if (parts.length === 3) {
-                return parts[0] * 3600 + parts[1] * 60 + parts[2];
-            } else if (parts.length === 2) {
-                return parts[0] * 60 + parts[1];
-            } else if (parts.length === 1) {
-                return parts[0];
+                return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
             }
             return 0;
         }
 
         function secondsToHHMMSS(seconds) {
-            if (typeof seconds !== 'number' || seconds < 0) {
-                seconds = 0;
+            if (typeof seconds !== 'number' || seconds < 0 || !isFinite(seconds)) {
+                return "00:00:00";
             }
+            
+            // 最大値制限
+            seconds = Math.min(seconds, SECURITY_CONFIG.MAX_DURATION_HOURS * 3600);
+            
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
             const secs = Math.floor(seconds % 60);
@@ -416,6 +501,10 @@
         }
 
         function addSecondsToTime(timeStr, secondsToAdd) {
+            if (!validateTimeInput(timeStr) || typeof secondsToAdd !== 'number') {
+                return "00:00:00";
+            }
+            
             const parts = timeStr.split(':').map(Number);
             let totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2] + secondsToAdd;
             totalSeconds = totalSeconds % (24 * 3600);
@@ -428,10 +517,18 @@
         }
 
         function getBrightness(hexColor) {
-            const r = parseInt(hexColor.slice(1, 3), 16);
-            const g = parseInt(hexColor.slice(3, 5), 16);
-            const b = parseInt(hexColor.slice(5, 7), 16);
-            return (r * 299 + g * 587 + b * 114) / 1000;
+            if (typeof hexColor !== 'string' || !hexColor.startsWith('#')) {
+                return 128; // デフォルト値
+            }
+            
+            try {
+                const r = parseInt(hexColor.slice(1, 3), 16) || 0;
+                const g = parseInt(hexColor.slice(3, 5), 16) || 0;
+                const b = parseInt(hexColor.slice(5, 7), 16) || 0;
+                return (r * 299 + g * 587 + b * 114) / 1000;
+            } catch {
+                return 128;
+            }
         }
 
         function getTextColor(bgColor) {
@@ -439,25 +536,123 @@
             return brightness > 180 ? "#333333" : "#000000";
         }
 
-        // イベントハンドラー
-        function onTargetTimeChange() {
-            const input = document.getElementById('targetTime');
-            try {
-                const seconds = hhmmssToSeconds(input.value);
-                input.value = secondsToHHMMSS(seconds);
-            } catch {
-                input.value = "00:50:00";
+        // パフォーマンス: スロットル付き更新
+        function throttledUpdate() {
+            if (updateTimeoutId) {
+                clearTimeout(updateTimeoutId);
             }
-            updateAll();
+            updateTimeoutId = setTimeout(updateAll, SECURITY_CONFIG.UPDATE_THROTTLE_MS);
         }
 
-        // ドラッグ&ドロップのイベントハンドラー
+        // イベントハンドラー（セキュリティ強化版）
+        function onTargetTimeChange() {
+            const input = document.getElementById('targetTime');
+            const value = input.value.trim();
+            
+            if (validateTimeInput(value)) {
+                const seconds = hhmmssToSeconds(value);
+                input.value = secondsToHHMMSS(seconds);
+            } else {
+                input.value = "00:50:00";
+            }
+            throttledUpdate();
+        }
+
+        function onStartTimeChange() {
+            const input = document.getElementById('startTime');
+            const value = input.value.trim();
+            
+            if (validateTimeInput(value)) {
+                const parts = value.split(':');
+                const [hours, minutes, seconds] = parts.map(Number);
+                input.value = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                input.value = "20:00:00";
+            }
+            throttledUpdate();
+        }
+
+        function onBlockNameChange(blockId, value) {
+            const sanitizedValue = sanitizeString(value);
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                block.name = sanitizedValue;
+                // 入力フィールドも更新
+                const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="name"]`);
+                if (input && input.value !== sanitizedValue) {
+                    input.value = sanitizedValue;
+                }
+                throttledUpdate();
+            }
+        }
+
+        function onBlockTimeChange(blockId, value) {
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                if (validateTimeInput(value.trim())) {
+                    const newSeconds = hhmmssToSeconds(value.trim());
+                    block.duration_sec = newSeconds;
+                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
+                    if (input) {
+                        input.value = secondsToHHMMSS(newSeconds);
+                    }
+                } else {
+                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
+                    if (input) {
+                        input.value = secondsToHHMMSS(block.duration_sec);
+                    }
+                }
+                throttledUpdate();
+            }
+        }
+
+        function onColorButtonClick(blockId) {
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                const currentIndex = COLOR_NAMES.indexOf(block.color_name);
+                const nextIndex = (currentIndex + 1) % COLOR_NAMES.length;
+                block.color_name = COLOR_NAMES[nextIndex];
+                throttledUpdate();
+            }
+        }
+
+        function deleteBlock(blockId) {
+            if (blocksData.length <= 1) return;
+            blocksData = blocksData.filter(b => b.id !== blockId);
+            throttledUpdate();
+        }
+
+        function addBlock() {
+            // 最大ブロック数チェック
+            if (blocksData.length >= SECURITY_CONFIG.MAX_BLOCKS) {
+                showLimitWarning();
+                return;
+            }
+            
+            const newBlockId = `block_${nextBlockIdCounter}`;
+            nextBlockIdCounter++;
+            
+            const newBlock = {
+                id: newBlockId,
+                name: sanitizeString(`新しいブロック${nextBlockIdCounter}`),
+                duration_sec: 300,
+                color_name: DEFAULT_BLOCK_COLOR_NAME
+            };
+            blocksData.push(newBlock);
+            throttledUpdate();
+        }
+
+        // ドラッグ&ドロップのイベントハンドラー（セキュリティ強化版）
         function onDragStart(e, index) {
+            if (index < 0 || index >= blocksData.length) return;
+            
             draggedElement = e.target.closest('.block-row');
             draggedIndex = index;
-            draggedElement.classList.add('dragging');
+            if (draggedElement) {
+                draggedElement.classList.add('dragging');
+            }
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', draggedElement.outerHTML);
+            e.dataTransfer.setData('text/plain', index.toString()); // セキュアなデータ転送
         }
 
         function onDragEnd(e) {
@@ -467,7 +662,6 @@
                 draggedIndex = -1;
             }
             
-            // すべてのdrag-overクラスを削除
             document.querySelectorAll('.block-row').forEach(row => {
                 row.classList.remove('drag-over');
             });
@@ -501,144 +695,155 @@
                 row.classList.remove('drag-over');
             }
             
-            if (draggedIndex !== -1 && draggedIndex !== dropIndex) {
-                // 配列の順序を変更
+            // セキュリティチェック
+            if (draggedIndex >= 0 && draggedIndex < blocksData.length && 
+                dropIndex >= 0 && dropIndex < blocksData.length && 
+                draggedIndex !== dropIndex) {
+                
                 const draggedBlock = blocksData[draggedIndex];
                 blocksData.splice(draggedIndex, 1);
                 blocksData.splice(dropIndex, 0, draggedBlock);
-                updateAll();
+                throttledUpdate();
             }
         }
 
-        function onStartTimeChange() {
-            const input = document.getElementById('startTime');
-            try {
-                const parts = input.value.split(':');
-                if (parts.length === 3) {
-                    const [hours, minutes, seconds] = parts.map(Number);
-                    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59) {
-                        input.value = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                    } else {
-                        throw new Error();
-                    }
-                } else {
-                    throw new Error();
-                }
-            } catch {
-                input.value = "20:00:00";
-            }
-            updateAll();
+        // 警告表示関数
+        function showPerformanceWarning() {
+            const warningElement = document.getElementById('performanceWarning');
+            warningElement.className = 'performance-warning';
+            warningElement.style.display = 'block';
+            warningElement.textContent = `⚠️ パフォーマンス警告: ブロック数が${SECURITY_CONFIG.PERFORMANCE_WARNING_THRESHOLD}個を超えています。動作が重くなる可能性があります。`;
         }
 
-        function onBlockNameChange(blockId, value) {
-            const block = blocksData.find(b => b.id === blockId);
-            if (block) {
-                block.name = value;
-                updateAll();
-            }
+        function hidePerformanceWarning() {
+            const warningElement = document.getElementById('performanceWarning');
+            warningElement.style.display = 'none';
         }
 
-        function onBlockTimeChange(blockId, value) {
-            const block = blocksData.find(b => b.id === blockId);
-            if (block) {
-                try {
-                    const newSeconds = hhmmssToSeconds(value);
-                    block.duration_sec = newSeconds;
-                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
-                    if (input) {
-                        input.value = secondsToHHMMSS(newSeconds);
-                    }
-                } catch {
-                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
-                    if (input) {
-                        input.value = secondsToHHMMSS(block.duration_sec);
-                    }
-                }
-                updateAll();
-            }
+        function showLimitWarning() {
+            const warningElement = document.getElementById('limitWarning');
+            warningElement.className = 'limit-warning';
+            warningElement.style.display = 'block';
+            warningElement.textContent = `🚫 制限に達しました: 最大${SECURITY_CONFIG.MAX_BLOCKS}個までのブロックが作成できます。`;
         }
 
-        function onColorButtonClick(blockId) {
-            const block = blocksData.find(b => b.id === blockId);
-            if (block) {
-                const currentIndex = COLOR_NAMES.indexOf(block.color_name);
-                const nextIndex = (currentIndex + 1) % COLOR_NAMES.length;
-                block.color_name = COLOR_NAMES[nextIndex];
-                updateAll();
-            }
-        }
-
-        function deleteBlock(blockId) {
-            if (blocksData.length <= 1) return;
-            blocksData = blocksData.filter(b => b.id !== blockId);
-            updateAll();
-        }
-
-        function addBlock() {
-            const newBlockId = `block_${nextBlockIdCounter}`;
-            nextBlockIdCounter++;
-            
-            const newBlock = {
-                id: newBlockId,
-                name: `新しいブロック${nextBlockIdCounter}`,
-                duration_sec: 300,
-                color_name: DEFAULT_BLOCK_COLOR_NAME
-            };
-            blocksData.push(newBlock);
-            updateAll();
+        function hideLimitWarning() {
+            const warningElement = document.getElementById('limitWarning');
+            warningElement.style.display = 'none';
         }
 
         function updateAll() {
-            const totalSeconds = blocksData.reduce((sum, b) => sum + b.duration_sec, 0);
-            const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
+            try {
+                const totalSeconds = blocksData.reduce((sum, b) => {
+                    const duration = typeof b.duration_sec === 'number' ? b.duration_sec : 0;
+                    return sum + Math.max(0, duration);
+                }, 0);
+                
+                const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
 
-            document.getElementById('totalTime').textContent = secondsToHHMMSS(totalSeconds);
+                document.getElementById('totalTime').textContent = secondsToHHMMSS(totalSeconds);
+                document.getElementById('blockCount').textContent = blocksData.length.toString();
 
-            const diffSeconds = totalSeconds - targetSeconds;
-            const diffElement = document.getElementById('diffTime');
-            diffElement.textContent = secondsToHHMMSS(Math.abs(diffSeconds));
-            
-            if (diffSeconds > 0) {
-                diffElement.className = 'time-display error';
-            } else if (diffSeconds < 0) {
-                diffElement.className = 'time-display warning';
-            } else {
-                diffElement.className = 'time-display success';
+                const diffSeconds = totalSeconds - targetSeconds;
+                const diffElement = document.getElementById('diffTime');
+                diffElement.textContent = secondsToHHMMSS(Math.abs(diffSeconds));
+                
+                if (diffSeconds > 0) {
+                    diffElement.className = 'time-display error';
+                } else if (diffSeconds < 0) {
+                    diffElement.className = 'time-display warning';
+                } else {
+                    diffElement.className = 'time-display success';
+                }
+
+                // パフォーマンス警告
+                if (blocksData.length >= SECURITY_CONFIG.PERFORMANCE_WARNING_THRESHOLD) {
+                    showPerformanceWarning();
+                } else {
+                    hidePerformanceWarning();
+                }
+
+                // 制限警告
+                if (blocksData.length >= SECURITY_CONFIG.MAX_BLOCKS) {
+                    document.getElementById('addBlockBtn').disabled = true;
+                } else {
+                    document.getElementById('addBlockBtn').disabled = false;
+                    hideLimitWarning();
+                }
+
+                buildBlockManagementRows();
+                buildTimelineDisplay();
+                
+            } catch (error) {
+                console.error('Update error:', error);
+                // エラーが発生した場合のフォールバック
+                document.getElementById('totalTime').textContent = "エラー";
+                document.getElementById('diffTime').textContent = "エラー";
             }
-
-            buildBlockManagementRows();
-            buildTimelineDisplay();
         }
 
         function buildBlockManagementRows() {
             const container = document.getElementById('blocksContainer');
-            container.innerHTML = '';
+            
+            // 既存の要素をクリア
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
 
             blocksData.forEach((block, index) => {
                 const row = document.createElement('div');
                 row.className = 'block-row';
                 row.draggable = true;
                 
-                const blockColorHex = COLOR_OPTIONS[block.color_name];
+                const blockColorHex = COLOR_OPTIONS[block.color_name] || COLOR_OPTIONS[DEFAULT_BLOCK_COLOR_NAME];
                 const textColor = getTextColor(blockColorHex);
 
-                row.innerHTML = `
-                    <div class="drag-handle" title="ドラッグして順序変更">⋮⋮</div>
-                    <input type="text" class="block-name-input" value="${block.name}" 
-                           onblur="onBlockNameChange('${block.id}', this.value)">
-                    <div class="color-button" style="background-color: ${blockColorHex}; color: ${textColor};" 
-                         onclick="onColorButtonClick('${block.id}')" title="色を変更: ${block.color_name}">
-                        🎨
-                    </div>
-                    <input type="text" class="time-input-small" value="${secondsToHHMMSS(block.duration_sec)}" 
-                           style="background-color: ${blockColorHex}; color: ${textColor};"
-                           data-block-id="${block.id}" data-type="time"
-                           onblur="onBlockTimeChange('${block.id}', this.value)">
-                    <button class="delete-btn" onclick="deleteBlock('${block.id}')" 
-                            ${blocksData.length <= 1 ? 'disabled' : ''}>
-                        🗑️
-                    </button>
-                `;
+                // セキュア要素作成: innerHTMLの代わりにcreateElementを使用
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+                dragHandle.title = 'ドラッグして順序変更';
+                dragHandle.textContent = '⋮⋮';
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'block-name-input';
+                nameInput.value = block.name;
+                nameInput.maxLength = SECURITY_CONFIG.MAX_NAME_LENGTH;
+                nameInput.setAttribute('data-block-id', block.id);
+                nameInput.setAttribute('data-type', 'name');
+                nameInput.addEventListener('blur', (e) => onBlockNameChange(block.id, e.target.value));
+
+                const colorButton = document.createElement('div');
+                colorButton.className = 'color-button';
+                colorButton.style.backgroundColor = blockColorHex;
+                colorButton.style.color = textColor;
+                colorButton.title = `色を変更: ${block.color_name}`;
+                colorButton.textContent = '🎨';
+                colorButton.addEventListener('click', () => onColorButtonClick(block.id));
+
+                const timeInput = document.createElement('input');
+                timeInput.type = 'text';
+                timeInput.className = 'time-input-small';
+                timeInput.value = secondsToHHMMSS(block.duration_sec);
+                timeInput.style.backgroundColor = blockColorHex;
+                timeInput.style.color = textColor;
+                timeInput.maxLength = 8;
+                timeInput.setAttribute('data-block-id', block.id);
+                timeInput.setAttribute('data-type', 'time');
+                timeInput.addEventListener('blur', (e) => onBlockTimeChange(block.id, e.target.value));
+
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'delete-btn';
+                deleteButton.textContent = '🗑️';
+                deleteButton.disabled = blocksData.length <= 1;
+                deleteButton.addEventListener('click', () => deleteBlock(block.id));
+
+                // 要素を追加
+                row.appendChild(dragHandle);
+                row.appendChild(nameInput);
+                row.appendChild(colorButton);
+                row.appendChild(timeInput);
+                row.appendChild(deleteButton);
 
                 // ドラッグ&ドロップのイベントリスナーを追加
                 row.addEventListener('dragstart', (e) => onDragStart(e, index));
@@ -654,20 +859,32 @@
 
         function buildTimelineDisplay() {
             const container = document.getElementById('timelineContainer');
-            container.innerHTML = '';
+            
+            // 既存の要素をクリア
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
 
-            const totalSeconds = blocksData.reduce((sum, b) => sum + b.duration_sec, 0);
+            const totalSeconds = blocksData.reduce((sum, b) => sum + (b.duration_sec || 0), 0);
             const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
             const startTime = document.getElementById('startTime').value;
 
-            if (totalSeconds === 0) return;
+            if (totalSeconds === 0) {
+                const emptyMessage = document.createElement('div');
+                emptyMessage.textContent = 'ブロックがありません';
+                emptyMessage.style.textAlign = 'center';
+                emptyMessage.style.color = '#9ca3af';
+                emptyMessage.style.padding = '20px';
+                container.appendChild(emptyMessage);
+                return;
+            }
 
             let currentPosition = 0;
             let targetMarkerAdded = false;
 
             blocksData.forEach(block => {
-                const blockDurationSec = block.duration_sec;
-                const blockColor = COLOR_OPTIONS[block.color_name];
+                const blockDurationSec = block.duration_sec || 0;
+                const blockColor = COLOR_OPTIONS[block.color_name] || COLOR_OPTIONS[DEFAULT_BLOCK_COLOR_NAME];
                 const textColor = getTextColor(blockColor);
 
                 const blockStartTime = addSecondsToTime(startTime, currentPosition);
@@ -676,7 +893,6 @@
                 // 目標時間マーカーの処理
                 if (targetSeconds > 0 && !targetMarkerAdded && (currentPosition + blockDurationSec) >= targetSeconds) {
                     if (targetSeconds > currentPosition) {
-                        // ブロック前半（目標時間まで）
                         const timeWithinTarget = targetSeconds - currentPosition;
                         if (timeWithinTarget > 0) {
                             const withinEndTime = addSecondsToTime(startTime, currentPosition + timeWithinTarget);
@@ -688,11 +904,24 @@
                     const targetTimeClock = addSecondsToTime(startTime, targetSeconds);
                     const markerDiv = document.createElement('div');
                     markerDiv.className = 'timeline-block';
-                    markerDiv.innerHTML = `
-                        <div class="timeline-marker">▶</div>
-                        <div class="target-marker" style="width: 450px;"></div>
-                        <div class="timeline-time" style="color: #16a34a; font-weight: bold;">${targetTimeClock}</div>
-                    `;
+                    
+                    const marker = document.createElement('div');
+                    marker.className = 'timeline-marker';
+                    marker.textContent = '▶';
+                    
+                    const line = document.createElement('div');
+                    line.className = 'target-marker';
+                    line.style.width = '450px';
+                    
+                    const timeDisplay = document.createElement('div');
+                    timeDisplay.className = 'timeline-time';
+                    timeDisplay.style.color = '#16a34a';
+                    timeDisplay.style.fontWeight = 'bold';
+                    timeDisplay.textContent = targetTimeClock;
+                    
+                    markerDiv.appendChild(marker);
+                    markerDiv.appendChild(line);
+                    markerDiv.appendChild(timeDisplay);
                     container.appendChild(markerDiv);
                     targetMarkerAdded = true;
 
@@ -727,11 +956,24 @@
                 const targetTimeClock = addSecondsToTime(startTime, targetSeconds);
                 const markerDiv = document.createElement('div');
                 markerDiv.className = 'timeline-block';
-                markerDiv.innerHTML = `
-                    <div class="timeline-marker">▶</div>
-                    <div class="target-marker" style="width: 450px;"></div>
-                    <div class="timeline-time" style="color: #16a34a; font-weight: bold;">${targetTimeClock}</div>
-                `;
+                
+                const marker = document.createElement('div');
+                marker.className = 'timeline-marker';
+                marker.textContent = '▶';
+                
+                const line = document.createElement('div');
+                line.className = 'target-marker';
+                line.style.width = '450px';
+                
+                const timeDisplay = document.createElement('div');
+                timeDisplay.className = 'timeline-time';
+                timeDisplay.style.color = '#16a34a';
+                timeDisplay.style.fontWeight = 'bold';
+                timeDisplay.textContent = targetTimeClock;
+                
+                markerDiv.appendChild(marker);
+                markerDiv.appendChild(line);
+                markerDiv.appendChild(timeDisplay);
                 container.appendChild(markerDiv);
             }
         }
@@ -752,26 +994,95 @@
                 timeColor = '#d97706';
             }
 
-            blockDiv.innerHTML = `
-                <div class="timeline-marker" style="color: ${isOver ? '#dc2626' : isShortage ? '#d97706' : 'inherit'};">${marker}</div>
-                <div class="timeline-content" style="background-color: ${bgColor}; color: ${textColor}; border-color: ${borderColor}; ${isShortage ? 'border-style: dashed;' : ''}">
-                    <div style="font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis;">${name}</div>
-                    <div style="font-size: 13px; font-weight: bold;">${duration}</div>
-                </div>
-                <div class="timeline-time" style="color: ${timeColor};">
-                    <div style="font-weight: bold;">${startTime}</div>
-                    <div>${endTime}</div>
-                    ${isOver ? '<div style="font-size: 8px;">超過</div>' : isShortage ? '<div style="font-size: 8px;">不足</div>' : ''}
-                </div>
-            `;
+            // マーカー
+            const markerElement = document.createElement('div');
+            markerElement.className = 'timeline-marker';
+            markerElement.style.color = isOver ? '#dc2626' : isShortage ? '#d97706' : 'inherit';
+            markerElement.textContent = marker;
+
+            // コンテンツ
+            const contentElement = document.createElement('div');
+            contentElement.className = 'timeline-content';
+            contentElement.style.backgroundColor = bgColor;
+            contentElement.style.color = textColor;
+            contentElement.style.borderColor = borderColor;
+            if (isShortage) {
+                contentElement.style.borderStyle = 'dashed';
+            }
+
+            const nameElement = document.createElement('div');
+            nameElement.style.fontSize = '13px';
+            nameElement.style.flex = '1';
+            nameElement.style.overflow = 'hidden';
+            nameElement.style.textOverflow = 'ellipsis';
+            nameElement.textContent = sanitizeString(name);
+
+            const durationElement = document.createElement('div');
+            durationElement.style.fontSize = '13px';
+            durationElement.style.fontWeight = 'bold';
+            durationElement.textContent = duration;
+
+            contentElement.appendChild(nameElement);
+            contentElement.appendChild(durationElement);
+
+            // 時刻表示
+            const timeElement = document.createElement('div');
+            timeElement.className = 'timeline-time';
+            timeElement.style.color = timeColor;
+
+            const startTimeElement = document.createElement('div');
+            startTimeElement.style.fontWeight = 'bold';
+            startTimeElement.textContent = startTime;
+
+            const endTimeElement = document.createElement('div');
+            endTimeElement.textContent = endTime;
+
+            timeElement.appendChild(startTimeElement);
+            timeElement.appendChild(endTimeElement);
+
+            if (isOver || isShortage) {
+                const statusElement = document.createElement('div');
+                statusElement.style.fontSize = '8px';
+                statusElement.textContent = isOver ? '超過' : '不足';
+                timeElement.appendChild(statusElement);
+            }
+
+            blockDiv.appendChild(markerElement);
+            blockDiv.appendChild(contentElement);
+            blockDiv.appendChild(timeElement);
             container.appendChild(blockDiv);
         }
 
-        // 初期化
+        // 初期化（セキュリティ強化版）
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('targetTime').addEventListener('blur', onTargetTimeChange);
-            document.getElementById('startTime').addEventListener('blur', onStartTimeChange);
+            // イベントリスナーを安全に設定
+            const targetTimeInput = document.getElementById('targetTime');
+            const startTimeInput = document.getElementById('startTime');
+            
+            if (targetTimeInput) {
+                targetTimeInput.addEventListener('blur', onTargetTimeChange);
+            }
+            
+            if (startTimeInput) {
+                startTimeInput.addEventListener('blur', onStartTimeChange);
+            }
+            
+            // 初期更新
             updateAll();
+            
+            // パフォーマンス監視
+            if (performance && performance.mark) {
+                performance.mark('app-initialized');
+            }
+        });
+
+        // エラーハンドリング
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e.error);
+            // 重大なエラーの場合はユーザーに通知
+            if (e.error && e.error.name === 'OutOfMemoryError') {
+                alert('メモリ不足です。ブロック数を減らしてください。');
+            }
         });
     </script>
 </body>
