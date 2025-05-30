@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>番組尺計算タイムライン</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f8fafb;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        .container {
+            display: flex;
+            gap: 18px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .left-panel {
+            width: 250px;
+            padding: 16px;
+        }
+
+        .center-panel {
+            flex: 1;
+            min-width: 620px;
+            padding: 16px;
+        }
+
+        .right-panel {
+            width: 480px;
+            padding: 16px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .time-input {
+            width: 150px;
+            height: 40px;
+            text-align: center;
+            border: 2px solid #2563eb;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 5px;
+        }
+
+        .time-display {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .timeline-container {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 10px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .timeline-block {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 2px;
+        }
+
+        .timeline-marker {
+            width: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .timeline-content {
+            width: 450px;
+            border: 1px solid #888;
+            border-radius: 5px;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .timeline-time {
+            width: 90px;
+            text-align: center;
+            font-size: 9px;
+        }
+
+        .block-management-header {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .block-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 5px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .block-name-input {
+            width: 120px;
+            height: 40px;
+            padding: 5px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .color-button {
+            width: 60px;
+            height: 40px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .time-input-small {
+            width: 100px;
+            height: 40px;
+            text-align: center;
+            border: 2px solid #888;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: bold;
+            padding: 5px;
+        }
+
+        .delete-btn {
+            width: 60px;
+            height: 40px;
+            background: transparent;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 18px;
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+
+        .delete-btn:disabled {
+            color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .add-block-btn {
+            width: 100%;
+            height: 50px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .add-block-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .target-marker {
+            height: 8px;
+            background: #16a34a;
+            border: 1px solid #16a34a;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+
+        .blocks-container {
+            max-height: 50vh;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .success { color: #16a34a; }
+        .warning { color: #d97706; }
+        .error { color: #dc2626; }
+        .primary { color: #2563eb; }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左パネル -->
+        <div class="card left-panel">
+            <div class="stat-card">
+                <div class="section-title">
+                    <span class="icon">🎬</span>
+                    番組尺計算
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="icon">⏰</span>
+                    開始時刻
+                </div>
+                <input type="text" id="startTime" class="time-input" value="20:00:00">
+            </div>
+
+            <div class="stat-card" style="background: #f0fdf4;">
+                <div class="stat-header success">
+                    <span class="icon">🏁</span>
+                    目標時間
+                </div>
+                <input type="text" id="targetTime" class="time-input" value="00:50:00">
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header primary">
+                    <span class="icon">⏱️</span>
+                    合計時間
+                </div>
+                <div id="totalTime" class="time-display primary">00:00:00</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header warning">
+                    <span class="icon">📊</span>
+                    目標との差
+                </div>
+                <div id="diffTime" class="time-display success">00:00:00</div>
+            </div>
+        </div>
+
+        <!-- 中央パネル -->
+        <div class="card center-panel">
+            <div class="section-title">
+                <span class="icon">📈</span>
+                タイムライン
+            </div>
+            <div class="timeline-container" id="timelineContainer">
+                <!-- タイムライン内容がここに動的生成される -->
+            </div>
+        </div>
+
+        <!-- 右パネル -->
+        <div class="card right-panel">
+            <div class="section-title">
+                <span class="icon">✏️</span>
+                ブロック管理
+            </div>
+            
+            <div class="block-management-header">
+                <div style="width: 120px; text-align: center;">ブロック名</div>
+                <div style="width: 60px; text-align: center;">カラー</div>
+                <div style="width: 100px; text-align: center;">時間</div>
+                <div style="width: 60px; text-align: center;">削除</div>
+            </div>
+
+            <div class="blocks-container" id="blocksContainer">
+                <!-- ブロック一覧がここに動的生成される -->
+            </div>
+
+            <button class="add-block-btn" onclick="addBlock()">
+                <span class="icon">➕</span> ブロック追加
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 色の定義
+        const COLOR_OPTIONS = {
+            "明るいピンク": "#FFD1D1",
+            "クリーム": "#FFFF99",
+            "明るい青緑": "#CBF266",
+            "明るい空色": "#B4EBFA",
+            "ベージュ": "#EDC58F",
+            "明るい緑": "#87E7B0",
+            "明るい紫": "#C7B2DE"
+        };
+
+        const COLOR_NAMES = Object.keys(COLOR_OPTIONS);
+        const DEFAULT_BLOCK_COLOR_NAME = "明るい空色";
+
+        // 初期データ
+        let blocksData = [
+            {id: "block_0", name: "VTR①", duration_sec: 540, color_name: "明るい空色"},
+            {id: "block_1", name: "CM①", duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_2", name: "VTR②", duration_sec: 780, color_name: "明るい空色"},
+            {id: "block_3", name: "CM②", duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_4", name: "VTR③", duration_sec: 660, color_name: "明るい空色"},
+            {id: "block_5", name: "CM③", duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_6", name: "VTR④", duration_sec: 480, color_name: "明るい空色"}
+        ];
+
+        let nextBlockIdCounter = blocksData.length;
+
+        // 時間変換ユーティリティ
+        function hhmmssToSeconds(timeStr) {
+            const parts = timeStr.split(':').map(Number);
+            if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else if (parts.length === 2) {
+                return parts[0] * 60 + parts[1];
+            } else if (parts.length === 1) {
+                return parts[0];
+            }
+            return 0;
+        }
+
+        function secondsToHHMMSS(seconds) {
+            if (typeof seconds !== 'number' || seconds < 0) {
+                seconds = 0;
+            }
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function addSecondsToTime(timeStr, secondsToAdd) {
+            const parts = timeStr.split(':').map(Number);
+            let totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2] + secondsToAdd;
+            totalSeconds = totalSeconds % (24 * 3600);
+            
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const secs = Math.floor(totalSeconds % 60);
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function getBrightness(hexColor) {
+            const r = parseInt(hexColor.slice(1, 3), 16);
+            const g = parseInt(hexColor.slice(3, 5), 16);
+            const b = parseInt(hexColor.slice(5, 7), 16);
+            return (r * 299 + g * 587 + b * 114) / 1000;
+        }
+
+        function getTextColor(bgColor) {
+            const brightness = getBrightness(bgColor);
+            return brightness > 180 ? "#333333" : "#000000";
+        }
+
+        // イベントハンドラー
+        function onTargetTimeChange() {
+            const input = document.getElementById('targetTime');
+            try {
+                const seconds = hhmmssToSeconds(input.value);
+                input.value = secondsToHHMMSS(seconds);
+            } catch {
+                input.value = "00:50:00";
+            }
+            updateAll();
+        }
+
+        function onStartTimeChange() {
+            const input = document.getElementById('startTime');
+            try {
+                const parts = input.value.split(':');
+                if (parts.length === 3) {
+                    const [hours, minutes, seconds] = parts.map(Number);
+                    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59) {
+                        input.value = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    } else {
+                        throw new Error();
+                    }
+                } else {
+                    throw new Error();
+                }
+            } catch {
+                input.value = "20:00:00";
+            }
+            updateAll();
+        }
+
+        function onBlockNameChange(blockId, value) {
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                block.name = value;
+                updateAll();
+            }
+        }
+
+        function onBlockTimeChange(blockId, value) {
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                try {
+                    const newSeconds = hhmmssToSeconds(value);
+                    block.duration_sec = newSeconds;
+                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
+                    if (input) {
+                        input.value = secondsToHHMMSS(newSeconds);
+                    }
+                } catch {
+                    const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
+                    if (input) {
+                        input.value = secondsToHHMMSS(block.duration_sec);
+                    }
+                }
+                updateAll();
+            }
+        }
+
+        function onColorButtonClick(blockId) {
+            const block = blocksData.find(b => b.id === blockId);
+            if (block) {
+                const currentIndex = COLOR_NAMES.indexOf(block.color_name);
+                const nextIndex = (currentIndex + 1) % COLOR_NAMES.length;
+                block.color_name = COLOR_NAMES[nextIndex];
+                updateAll();
+            }
+        }
+
+        function deleteBlock(blockId) {
+            if (blocksData.length <= 1) return;
+            blocksData = blocksData.filter(b => b.id !== blockId);
+            updateAll();
+        }
+
+        function addBlock() {
+            const newBlockId = `block_${nextBlockIdCounter}`;
+            nextBlockIdCounter++;
+            
+            const newBlock = {
+                id: newBlockId,
+                name: `新しいブロック${nextBlockIdCounter}`,
+                duration_sec: 300,
+                color_name: DEFAULT_BLOCK_COLOR_NAME
+            };
+            blocksData.push(newBlock);
+            updateAll();
+        }
+
+        function updateAll() {
+            const totalSeconds = blocksData.reduce((sum, b) => sum + b.duration_sec, 0);
+            const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
+
+            document.getElementById('totalTime').textContent = secondsToHHMMSS(totalSeconds);
+
+            const diffSeconds = totalSeconds - targetSeconds;
+            const diffElement = document.getElementById('diffTime');
+            diffElement.textContent = secondsToHHMMSS(Math.abs(diffSeconds));
+            
+            if (diffSeconds > 0) {
+                diffElement.className = 'time-display error';
+            } else if (diffSeconds < 0) {
+                diffElement.className = 'time-display warning';
+            } else {
+                diffElement.className = 'time-display success';
+            }
+
+            buildBlockManagementRows();
+            buildTimelineDisplay();
+        }
+
+        function buildBlockManagementRows() {
+            const container = document.getElementById('blocksContainer');
+            container.innerHTML = '';
+
+            blocksData.forEach(block => {
+                const row = document.createElement('div');
+                row.className = 'block-row';
+                
+                const blockColorHex = COLOR_OPTIONS[block.color_name];
+                const textColor = getTextColor(blockColorHex);
+
+                row.innerHTML = `
+                    <input type="text" class="block-name-input" value="${block.name}" 
+                           onblur="onBlockNameChange('${block.id}', this.value)">
+                    <div class="color-button" style="background-color: ${blockColorHex}; color: ${textColor};" 
+                         onclick="onColorButtonClick('${block.id}')" title="色を変更: ${block.color_name}">
+                        🎨
+                    </div>
+                    <input type="text" class="time-input-small" value="${secondsToHHMMSS(block.duration_sec)}" 
+                           style="background-color: ${blockColorHex}; color: ${textColor};"
+                           data-block-id="${block.id}" data-type="time"
+                           onblur="onBlockTimeChange('${block.id}', this.value)">
+                    <button class="delete-btn" onclick="deleteBlock('${block.id}')" 
+                            ${blocksData.length <= 1 ? 'disabled' : ''}>
+                        🗑️
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function buildTimelineDisplay() {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+
+            const totalSeconds = blocksData.reduce((sum, b) => sum + b.duration_sec, 0);
+            const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
+            const startTime = document.getElementById('startTime').value;
+
+            if (totalSeconds === 0) return;
+
+            let currentPosition = 0;
+            let targetMarkerAdded = false;
+
+            blocksData.forEach(block => {
+                const blockDurationSec = block.duration_sec;
+                const blockColor = COLOR_OPTIONS[block.color_name];
+                const textColor = getTextColor(blockColor);
+
+                const blockStartTime = addSecondsToTime(startTime, currentPosition);
+                const blockEndTime = addSecondsToTime(startTime, currentPosition + blockDurationSec);
+
+                // 目標時間マーカーの処理
+                if (targetSeconds > 0 && !targetMarkerAdded && (currentPosition + blockDurationSec) >= targetSeconds) {
+                    if (targetSeconds > currentPosition) {
+                        // ブロック前半（目標時間まで）
+                        const timeWithinTarget = targetSeconds - currentPosition;
+                        if (timeWithinTarget > 0) {
+                            const withinEndTime = addSecondsToTime(startTime, currentPosition + timeWithinTarget);
+                            createTimelineBlock('', blockColor, textColor, block.name, secondsToHHMMSS(timeWithinTarget), blockStartTime, withinEndTime);
+                        }
+                    }
+
+                    // 目標時間マーカー
+                    const targetTimeClock = addSecondsToTime(startTime, targetSeconds);
+                    const markerDiv = document.createElement('div');
+                    markerDiv.className = 'timeline-block';
+                    markerDiv.innerHTML = `
+                        <div class="timeline-marker">▶</div>
+                        <div class="target-marker" style="width: 450px;"></div>
+                        <div class="timeline-time" style="color: #16a34a; font-weight: bold;">${targetTimeClock}</div>
+                    `;
+                    container.appendChild(markerDiv);
+                    targetMarkerAdded = true;
+
+                    // ブロック後半（超過分）
+                    if ((currentPosition + blockDurationSec) > targetSeconds) {
+                        const timeOver = (currentPosition + blockDurationSec) - targetSeconds;
+                        if (timeOver > 0) {
+                            const overStartTime = addSecondsToTime(startTime, currentPosition + (blockDurationSec - timeOver));
+                            createTimelineBlock('⚠', blockColor, textColor, `${block.name} (超過)`, secondsToHHMMSS(timeOver), overStartTime, blockEndTime, true);
+                        }
+                    }
+                } else {
+                    // 通常のブロック
+                    const isOverTarget = currentPosition >= targetSeconds && targetSeconds > 0;
+                    const marker = isOverTarget ? '⚠' : '';
+                    const displayName = isOverTarget ? `${block.name} (超過)` : block.name;
+                    createTimelineBlock(marker, blockColor, textColor, displayName, secondsToHHMMSS(blockDurationSec), blockStartTime, blockEndTime, isOverTarget);
+                }
+
+                currentPosition += blockDurationSec;
+            });
+
+            // 目標時間が全ブロック後にある場合
+            if (targetSeconds > 0 && !targetMarkerAdded && currentPosition < targetSeconds) {
+                const shortageSeconds = targetSeconds - currentPosition;
+                const shortageStartTime = addSecondsToTime(startTime, currentPosition);
+                const shortageEndTime = addSecondsToTime(startTime, targetSeconds);
+                
+                createTimelineBlock('⏱', '#f8f9fa', '#6b7280', '不足分', secondsToHHMMSS(shortageSeconds), shortageStartTime, shortageEndTime, false, true);
+
+                // 目標時間マーカー
+                const targetTimeClock = addSecondsToTime(startTime, targetSeconds);
+                const markerDiv = document.createElement('div');
+                markerDiv.className = 'timeline-block';
+                markerDiv.innerHTML = `
+                    <div class="timeline-marker">▶</div>
+                    <div class="target-marker" style="width: 450px;"></div>
+                    <div class="timeline-time" style="color: #16a34a; font-weight: bold;">${targetTimeClock}</div>
+                `;
+                container.appendChild(markerDiv);
+            }
+        }
+
+        function createTimelineBlock(marker, bgColor, textColor, name, duration, startTime, endTime, isOver = false, isShortage = false) {
+            const container = document.getElementById('timelineContainer');
+            const blockDiv = document.createElement('div');
+            blockDiv.className = 'timeline-block';
+            
+            let borderColor = '#888';
+            let timeColor = '#6b7280';
+            
+            if (isOver) {
+                borderColor = '#dc2626';
+                timeColor = '#dc2626';
+            } else if (isShortage) {
+                borderColor = '#d97706';
+                timeColor = '#d97706';
+            }
+
+            blockDiv.innerHTML = `
+                <div class="timeline-marker" style="color: ${isOver ? '#dc2626' : isShortage ? '#d97706' : 'inherit'};">${marker}</div>
+                <div class="timeline-content" style="background-color: ${bgColor}; color: ${textColor}; border-color: ${borderColor}; ${isShortage ? 'border-style: dashed;' : ''}">
+                    <div style="font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                    <div style="font-size: 13px; font-weight: bold;">${duration}</div>
+                </div>
+                <div class="timeline-time" style="color: ${timeColor};">
+                    <div style="font-weight: bold;">${startTime}</div>
+                    <div>${endTime}</div>
+                    ${isOver ? '<div style="font-size: 8px;">超過</div>' : isShortage ? '<div style="font-size: 8px;">不足</div>' : ''}
+                </div>
+            `;
+            container.appendChild(blockDiv);
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('targetTime').addEventListener('blur', onTargetTimeChange);
+            document.getElementById('startTime').addEventListener('blur', onStartTimeChange);
+            updateAll();
+        });
+    </script>
+</body>
+</html>
