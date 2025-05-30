@@ -444,14 +444,6 @@
                 <div id="diffTime" class="time-display success">00:00:00</div>
             </div>
 
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="icon">📈</span>
-                    ブロック数
-                </div>
-                <div id="blockCount" class="time-display">7</div>
-            </div>
-
             <button class="export-btn" onclick="showTextOutput()">
                 <span class="icon">📄</span>
                 テキスト出力
@@ -785,7 +777,6 @@
             const targetSeconds = hhmmssToSeconds(document.getElementById('targetTime').value);
 
             document.getElementById('totalTime').textContent = secondsToHHMMSS(totalSeconds);
-            document.getElementById('blockCount').textContent = blocksData.length.toString();
 
             const diffSeconds = totalSeconds - targetSeconds;
             const diffElement = document.getElementById('diffTime');
@@ -1118,7 +1109,6 @@
                 output += `${(index + 1).toString().padStart(2, '0')}. ${block.name}\n`;
                 output += `    時間: ${secondsToHHMMSS(blockDurationSec)}\n`;
                 output += `    開始: ${blockStartTime} → 終了: ${blockEndTime}\n`;
-                output += `    色: ${block.color_name}\n`;
                 if (isOverTarget) {
                     output += `    ⚠️ 目標時間超過\n`;
                 }
@@ -1135,18 +1125,6 @@
                 output += '-----------------------------------\n\n';
             }
             
-            // 統計情報
-            output += '■ 統計情報\n';
-            const colorCounts = {};
-            blocksData.forEach(block => {
-                colorCounts[block.color_name] = (colorCounts[block.color_name] || 0) + 1;
-            });
-            
-            Object.entries(colorCounts).forEach(([color, count]) => {
-                output += `${color}: ${count}個\n`;
-            });
-            
-            output += '\n';
             output += `生成日時: ${new Date().toLocaleString('ja-JP')}\n`;
             output += '=====================================';
             
