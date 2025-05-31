@@ -13,14 +13,25 @@
 
         // プリセット管理機能
         function showPresetModal() {
+            console.log('showPresetModal called'); // デバッグ用
             const modal = document.getElementById('presetModal');
+            console.log('Modal element:', modal); // デバッグ用
+            
+            if (!modal) {
+                console.error('presetModal element not found');
+                return;
+            }
+            
             modal.style.display = 'block';
             
             // プリセット一覧を更新
             buildPresetList();
             
             // 入力フィールドをクリア
-            document.getElementById('presetNameInput').value = '';
+            const nameInput = document.getElementById('presetNameInput');
+            if (nameInput) {
+                nameInput.value = '';
+            }
             
             // モーダル外クリックで閉じる
             modal.onclick = function(event) {
@@ -31,8 +42,11 @@
         }
 
         function hidePresetModal() {
+            console.log('hidePresetModal called'); // デバッグ用
             const modal = document.getElementById('presetModal');
-            modal.style.display = 'none';
+            if (modal) {
+                modal.style.display = 'none';
+            }
         }
 
         function saveCurrentPreset() {
@@ -125,8 +139,17 @@
         }
 
         function buildPresetList() {
+            console.log('buildPresetList called'); // デバッグ用
             const container = document.getElementById('presetList');
+            
+            if (!container) {
+                console.error('presetList element not found');
+                return;
+            }
+            
             container.innerHTML = '';
+            
+            console.log('Saved presets:', savedPresets); // デバッグ用
             
             if (savedPresets.length === 0) {
                 const noPresets = document.createElement('div');
@@ -136,7 +159,9 @@
                 return;
             }
             
-            savedPresets.forEach(preset => {
+            savedPresets.forEach((preset, index) => {
+                console.log(`Building preset ${index}:`, preset); // デバッグ用
+                
                 const item = document.createElement('div');
                 item.className = 'preset-item';
                 
@@ -175,6 +200,8 @@
                 item.appendChild(actions);
                 container.appendChild(item);
             });
+            
+            console.log('Preset list built successfully'); // デバッグ用
         }
 
         body {
@@ -579,17 +606,6 @@
         }
 
         /* プリセット管理モーダル */
-        .preset-modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-
         .preset-modal-content {
             background-color: white;
             margin: 5% auto;
@@ -1003,7 +1019,7 @@
                 テキスト出力
             </button>
 
-            <button class="preset-btn" onclick="showPresetModal()">
+            <button class="preset-btn" id="presetBtn">
                 <span class="icon">💾</span>
                 プリセット管理
             </button>
@@ -1048,7 +1064,7 @@
     </div>
 
     <!-- プリセット管理モーダル -->
-    <div id="presetModal" class="preset-modal">
+    <div id="presetModal" class="modal">
         <div class="preset-modal-content">
             <div class="preset-header">
                 <div class="preset-title">💾 プリセット管理</div>
@@ -1812,8 +1828,11 @@
 
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing app...'); // デバッグ用
+            
             const targetTimeInput = document.getElementById('targetTime');
             const startTimeInput = document.getElementById('startTime');
+            const presetBtn = document.getElementById('presetBtn');
             
             if (targetTimeInput) {
                 targetTimeInput.addEventListener('blur', onTargetTimeChange);
@@ -1821,6 +1840,17 @@
             
             if (startTimeInput) {
                 startTimeInput.addEventListener('blur', onStartTimeChange);
+            }
+            
+            // プリセットボタンのイベントリスナー
+            if (presetBtn) {
+                console.log('Preset button found, adding event listener'); // デバッグ用
+                presetBtn.addEventListener('click', function() {
+                    console.log('Preset button clicked'); // デバッグ用
+                    showPresetModal();
+                });
+            } else {
+                console.error('Preset button not found'); // デバッグ用
             }
             
             // ESCキーでモーダルを閉じる
@@ -1841,6 +1871,7 @@
             });
             
             updateAll();
+            console.log('App initialization completed'); // デバッグ用
         });
     </script>
 </body>
