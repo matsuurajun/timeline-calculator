@@ -36,7 +36,7 @@
             // モーダル外クリックで閉じる
             modal.onclick = function(event) {
                 if (event.target === modal) {
-                    hidePresetModal();
+                    window.hidePresetModal();
                 }
             };
         }
@@ -118,7 +118,7 @@
             
             // UI更新
             updateAll();
-            hidePresetModal();
+            window.hidePresetModal();
             
             // 成功メッセージ
             setTimeout(() => {
@@ -1068,14 +1068,14 @@
         <div class="preset-modal-content">
             <div class="preset-header">
                 <div class="preset-title">💾 プリセット管理</div>
-                <button class="close-btn" onclick="hidePresetModal()">&times;</button>
+                <button class="close-btn" onclick="window.hidePresetModal()">&times;</button>
             </div>
             
             <!-- 現在の構成を保存 -->
             <div class="save-preset-section">
                 <h4 style="margin-bottom: 10px; color: #374151;">現在の構成を保存</h4>
                 <input type="text" id="presetNameInput" class="preset-name-input" placeholder="プリセット名を入力（例：1時間番組、CM多め構成）" maxlength="30">
-                <button class="save-preset-btn" onclick="saveCurrentPreset()">💾 保存</button>
+                <button class="save-preset-btn" onclick="window.saveCurrentPreset()">💾 保存</button>
             </div>
             
             <!-- 保存済みプリセット一覧 -->
@@ -1167,6 +1167,199 @@
             }
         ];
         let nextPresetIdCounter = 3;
+
+        // プリセット管理機能 - グローバルスコープに配置
+        window.showPresetModal = function() {
+            console.log('showPresetModal called'); // デバッグ用
+            const modal = document.getElementById('presetModal');
+            console.log('Modal element:', modal); // デバッグ用
+            
+            if (!modal) {
+                console.error('presetModal element not found');
+                return;
+            }
+            
+            modal.style.display = 'block';
+            
+            // プリセット一覧を更新
+            buildPresetList();
+            
+            // 入力フィールドをクリア
+            const nameInput = document.getElementById('presetNameInput');
+            if (nameInput) {
+                nameInput.value = '';
+            }
+            
+            // モーダル外クリックで閉じる
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    hidePresetModal();
+                }
+            };
+        };
+
+        window.hidePresetModal = function() {
+            console.log('hidePresetModal called'); // デバッグ用
+            const modal = document.getElementById('presetModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        window.saveCurrentPreset = function() {
+            const nameInput = document.getElementById('presetNameInput');
+            const presetName = sanitizeString(nameInput.value.trim());
+            
+            if (!presetName) {
+                alert('プリセット名を入力してください。');
+                return;
+            }
+            
+            if (savedPresets.length >= MAX_PRESETS) {
+                alert(`最大${MAX_PRESETS}個までしか保存できません。`);
+                return;
+            }
+            
+            // 現在のブロック構成をコピー
+            const currentBlocks = blocksData.map(block => ({
+                name: block.name,
+                duration_sec: block.duration_sec,
+                color_name: block.color_name
+            }));
+            
+            const newPreset = {
+                id: `preset_${nextPresetIdCounter}`,
+                name: presetName,
+                blocks: currentBlocks,
+                createdAt: new Date().toLocaleString('ja-JP')
+            };
+            
+            savedPresets.push(newPreset);
+            nextPresetIdCounter++;
+            
+            // UI更新
+            buildPresetList();
+            nameInput.value = '';
+            
+            // 成功メッセージ
+            const saveBtn = document.querySelector('.save-preset-btn');
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = '✅ 保存しました！';
+            saveBtn.disabled = true;
+            
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+                saveBtn.disabled = false;
+            }, 2000);
+        };
+
+        function loadPreset(presetId) {
+            const preset = savedPresets.find(p => p.id === presetId);
+            if (!preset) return;
+            
+            // 確認ダイアログ
+            if (!confirm(`「${preset.name}」を読み込みますか？\n現在の構成は上書きされます。`)) {
+                return;
+            }
+            
+            // プリセットからブロックデータを復元
+            blocksData = preset.blocks.map((block, index) => ({
+                id: `block_${Date.now()}_${index}`,
+                name: block.name,
+                duration_sec: block.duration_sec,
+                color_name: block.color_name
+            }));
+            
+            // カウンターを更新
+            nextBlockIdCounter = blocksData.length;
+            
+            // UI更新
+            updateAll();
+            hidePresetModal();
+            
+            // 成功メッセージ
+            setTimeout(() => {
+                alert(`「${preset.name}」を読み込みました。`);
+            }, 100);
+        }
+
+        function deletePreset(presetId) {
+            const preset = savedPresets.find(p => p.id === presetId);
+            if (!preset) return;
+            
+            if (!confirm(`「${preset.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+                return;
+            }
+            
+            savedPresets = savedPresets.filter(p => p.id !== presetId);
+            buildPresetList();
+        }
+
+        function buildPresetList() {
+            console.log('buildPresetList called'); // デバッグ用
+            const container = document.getElementById('presetList');
+            
+            if (!container) {
+                console.error('presetList element not found');
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            console.log('Saved presets:', savedPresets); // デバッグ用
+            
+            if (savedPresets.length === 0) {
+                const noPresets = document.createElement('div');
+                noPresets.className = 'no-presets';
+                noPresets.textContent = 'まだプリセットが保存されていません。';
+                container.appendChild(noPresets);
+                return;
+            }
+            
+            savedPresets.forEach((preset, index) => {
+                console.log(`Building preset ${index}:`, preset); // デバッグ用
+                
+                const item = document.createElement('div');
+                item.className = 'preset-item';
+                
+                const info = document.createElement('div');
+                info.className = 'preset-info';
+                
+                const name = document.createElement('div');
+                name.className = 'preset-name';
+                name.textContent = preset.name;
+                
+                const details = document.createElement('div');
+                details.className = 'preset-details';
+                const totalSeconds = preset.blocks.reduce((sum, block) => sum + block.duration_sec, 0);
+                details.textContent = `${preset.blocks.length}ブロック | ${secondsToHHMMSS(totalSeconds)} | ${preset.createdAt}`;
+                
+                info.appendChild(name);
+                info.appendChild(details);
+                
+                const actions = document.createElement('div');
+                actions.className = 'preset-actions';
+                
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'load-btn';
+                loadBtn.textContent = '読み込み';
+                loadBtn.addEventListener('click', () => loadPreset(preset.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-preset-btn';
+                deleteBtn.textContent = '削除';
+                deleteBtn.addEventListener('click', () => deletePreset(preset.id));
+                
+                actions.appendChild(loadBtn);
+                actions.appendChild(deleteBtn);
+                
+                item.appendChild(info);
+                item.appendChild(actions);
+                container.appendChild(item);
+            });
+            
+            console.log('Preset list built successfully'); // デバッグ用
+        }
 
         // セキュリティ: 入力サニタイゼーション
         function sanitizeString(str) {
@@ -1847,7 +2040,7 @@
                 console.log('Preset button found, adding event listener'); // デバッグ用
                 presetBtn.addEventListener('click', function() {
                     console.log('Preset button clicked'); // デバッグ用
-                    showPresetModal();
+                    window.showPresetModal();
                 });
             } else {
                 console.error('Preset button not found'); // デバッグ用
@@ -1857,7 +2050,7 @@
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape') {
                     hideTextOutput();
-                    hidePresetModal();
+                    window.hidePresetModal();
                 }
             });
             
