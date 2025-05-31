@@ -11,6 +11,172 @@
             padding: 0;
         }
 
+        // プリセット管理機能
+        function showPresetModal() {
+            const modal = document.getElementById('presetModal');
+            modal.style.display = 'block';
+            
+            // プリセット一覧を更新
+            buildPresetList();
+            
+            // 入力フィールドをクリア
+            document.getElementById('presetNameInput').value = '';
+            
+            // モーダル外クリックで閉じる
+            modal.onclick = function(event) {
+                if (event.target === modal) {
+                    hidePresetModal();
+                }
+            };
+        }
+
+        function hidePresetModal() {
+            const modal = document.getElementById('presetModal');
+            modal.style.display = 'none';
+        }
+
+        function saveCurrentPreset() {
+            const nameInput = document.getElementById('presetNameInput');
+            const presetName = sanitizeString(nameInput.value.trim());
+            
+            if (!presetName) {
+                alert('プリセット名を入力してください。');
+                return;
+            }
+            
+            if (savedPresets.length >= MAX_PRESETS) {
+                alert(`最大${MAX_PRESETS}個までしか保存できません。`);
+                return;
+            }
+            
+            // 現在のブロック構成をコピー
+            const currentBlocks = blocksData.map(block => ({
+                name: block.name,
+                duration_sec: block.duration_sec,
+                color_name: block.color_name
+            }));
+            
+            const newPreset = {
+                id: `preset_${nextPresetIdCounter}`,
+                name: presetName,
+                blocks: currentBlocks,
+                createdAt: new Date().toLocaleString('ja-JP')
+            };
+            
+            savedPresets.push(newPreset);
+            nextPresetIdCounter++;
+            
+            // UI更新
+            buildPresetList();
+            nameInput.value = '';
+            
+            // 成功メッセージ
+            const saveBtn = document.querySelector('.save-preset-btn');
+            const originalText = saveBtn.textContent;
+            saveBtn.textContent = '✅ 保存しました！';
+            saveBtn.disabled = true;
+            
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+                saveBtn.disabled = false;
+            }, 2000);
+        }
+
+        function loadPreset(presetId) {
+            const preset = savedPresets.find(p => p.id === presetId);
+            if (!preset) return;
+            
+            // 確認ダイアログ
+            if (!confirm(`「${preset.name}」を読み込みますか？\n現在の構成は上書きされます。`)) {
+                return;
+            }
+            
+            // プリセットからブロックデータを復元
+            blocksData = preset.blocks.map((block, index) => ({
+                id: `block_${Date.now()}_${index}`,
+                name: block.name,
+                duration_sec: block.duration_sec,
+                color_name: block.color_name
+            }));
+            
+            // カウンターを更新
+            nextBlockIdCounter = blocksData.length;
+            
+            // UI更新
+            updateAll();
+            hidePresetModal();
+            
+            // 成功メッセージ
+            setTimeout(() => {
+                alert(`「${preset.name}」を読み込みました。`);
+            }, 100);
+        }
+
+        function deletePreset(presetId) {
+            const preset = savedPresets.find(p => p.id === presetId);
+            if (!preset) return;
+            
+            if (!confirm(`「${preset.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+                return;
+            }
+            
+            savedPresets = savedPresets.filter(p => p.id !== presetId);
+            buildPresetList();
+        }
+
+        function buildPresetList() {
+            const container = document.getElementById('presetList');
+            container.innerHTML = '';
+            
+            if (savedPresets.length === 0) {
+                const noPresets = document.createElement('div');
+                noPresets.className = 'no-presets';
+                noPresets.textContent = 'まだプリセットが保存されていません。';
+                container.appendChild(noPresets);
+                return;
+            }
+            
+            savedPresets.forEach(preset => {
+                const item = document.createElement('div');
+                item.className = 'preset-item';
+                
+                const info = document.createElement('div');
+                info.className = 'preset-info';
+                
+                const name = document.createElement('div');
+                name.className = 'preset-name';
+                name.textContent = preset.name;
+                
+                const details = document.createElement('div');
+                details.className = 'preset-details';
+                const totalSeconds = preset.blocks.reduce((sum, block) => sum + block.duration_sec, 0);
+                details.textContent = `${preset.blocks.length}ブロック | ${secondsToHHMMSS(totalSeconds)} | ${preset.createdAt}`;
+                
+                info.appendChild(name);
+                info.appendChild(details);
+                
+                const actions = document.createElement('div');
+                actions.className = 'preset-actions';
+                
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'load-btn';
+                loadBtn.textContent = '読み込み';
+                loadBtn.addEventListener('click', () => loadPreset(preset.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-preset-btn';
+                deleteBtn.textContent = '削除';
+                deleteBtn.addEventListener('click', () => deletePreset(preset.id));
+                
+                actions.appendChild(loadBtn);
+                actions.appendChild(deleteBtn);
+                
+                item.appendChild(info);
+                item.appendChild(actions);
+                container.appendChild(item);
+            });
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f8fafb;
@@ -412,7 +578,168 @@
             font-size: 14px;
         }
 
-        /* テキスト出力モーダル */
+        /* プリセット管理モーダル */
+        .preset-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .preset-modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .preset-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .preset-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .save-preset-section {
+            background: #f8fafb;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .preset-name-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .save-preset-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .save-preset-btn:hover {
+            background: #1d4ed8;
+        }
+
+        .save-preset-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .preset-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .preset-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: white;
+        }
+
+        .preset-info {
+            flex: 1;
+        }
+
+        .preset-name {
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .preset-details {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .preset-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .load-btn, .delete-preset-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .load-btn {
+            background: #16a34a;
+            color: white;
+        }
+
+        .load-btn:hover {
+            background: #15803d;
+        }
+
+        .delete-preset-btn {
+            background: #dc2626;
+            color: white;
+        }
+
+        .delete-preset-btn:hover {
+            background: #b91c1c;
+        }
+
+        .no-presets {
+            text-align: center;
+            color: #6b7280;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        .preset-btn {
+            width: 100%;
+            height: 40px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .preset-btn:hover {
+            background: #6d28d9;
+        }
         .modal {
             display: none;
             position: fixed;
@@ -558,6 +885,51 @@
                 font-size: 13px;
             }
 
+            .preset-btn {
+                height: 40px;
+                font-size: 13px;
+            }
+
+            /* プリセットモーダルのモバイル対応 */
+            .preset-modal-content {
+                width: 95%;
+                margin: 10% auto;
+                padding: 15px;
+                max-height: 85%;
+            }
+
+            .preset-title {
+                font-size: 16px;
+            }
+
+            .preset-name-input {
+                padding: 8px;
+                font-size: 14px;
+            }
+
+            .save-preset-btn {
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+
+            .preset-item {
+                padding: 10px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .preset-actions {
+                align-self: stretch;
+                justify-content: space-between;
+            }
+
+            .load-btn, .delete-preset-btn {
+                flex: 1;
+                margin: 0 2px;
+                padding: 8px;
+            }
+
             /* モーダルのモバイル対応 */
             .modal-content {
                 width: 95%;
@@ -630,6 +1002,11 @@
                 <span class="icon">📄</span>
                 テキスト出力
             </button>
+
+            <button class="preset-btn" onclick="showPresetModal()">
+                <span class="icon">💾</span>
+                プリセット管理
+            </button>
         </div>
 
         <!-- 中央パネル -->
@@ -670,6 +1047,31 @@
         </div>
     </div>
 
+    <!-- プリセット管理モーダル -->
+    <div id="presetModal" class="preset-modal">
+        <div class="preset-modal-content">
+            <div class="preset-header">
+                <div class="preset-title">💾 プリセット管理</div>
+                <button class="close-btn" onclick="hidePresetModal()">&times;</button>
+            </div>
+            
+            <!-- 現在の構成を保存 -->
+            <div class="save-preset-section">
+                <h4 style="margin-bottom: 10px; color: #374151;">現在の構成を保存</h4>
+                <input type="text" id="presetNameInput" class="preset-name-input" placeholder="プリセット名を入力（例：1時間番組、CM多め構成）" maxlength="30">
+                <button class="save-preset-btn" onclick="saveCurrentPreset()">💾 保存</button>
+            </div>
+            
+            <!-- 保存済みプリセット一覧 -->
+            <div>
+                <h4 style="margin-bottom: 10px; color: #374151;">保存済みプリセット</h4>
+                <div id="presetList" class="preset-list">
+                    <!-- プリセット一覧がここに動的生成される -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- テキスト出力モーダル -->
     <div id="textOutputModal" class="modal">
         <div class="modal-content">
@@ -688,6 +1090,8 @@
         // 最低限の設定
         const MAX_BLOCKS = 100;
         const MAX_NAME_LENGTH = 50;
+        const MAX_PRESETS = 20;
+        const MAX_PRESET_NAME_LENGTH = 30;
 
         // 色の定義
         const COLOR_OPTIONS = {
@@ -717,6 +1121,36 @@
         let nextBlockIdCounter = blocksData.length;
         let draggedElement = null;
         let draggedIndex = -1;
+
+        // プリセット管理
+        let savedPresets = [
+            {
+                id: "preset_default_1",
+                name: "標準1時間番組",
+                blocks: [
+                    {name: "オープニング", duration_sec: 120, color_name: "明るい青緑"},
+                    {name: "VTR①", duration_sec: 900, color_name: "明るい空色"},
+                    {name: "CM①", duration_sec: 180, color_name: "ベージュ"},
+                    {name: "VTR②", duration_sec: 1200, color_name: "明るい空色"},
+                    {name: "CM②", duration_sec: 180, color_name: "ベージュ"},
+                    {name: "エンディング", duration_sec: 300, color_name: "明るい緑"}
+                ],
+                createdAt: new Date().toLocaleString('ja-JP')
+            },
+            {
+                id: "preset_default_2", 
+                name: "30分情報番組",
+                blocks: [
+                    {name: "ニュース①", duration_sec: 360, color_name: "明るいピンク"},
+                    {name: "CM", duration_sec: 180, color_name: "ベージュ"},
+                    {name: "特集", duration_sec: 720, color_name: "明るい空色"},
+                    {name: "CM", duration_sec: 180, color_name: "ベージュ"},
+                    {name: "ニュース②", duration_sec: 360, color_name: "明るいピンク"}
+                ],
+                createdAt: new Date().toLocaleString('ja-JP')
+            }
+        ];
+        let nextPresetIdCounter = 3;
 
         // セキュリティ: 入力サニタイゼーション
         function sanitizeString(str) {
@@ -1393,6 +1827,7 @@
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape') {
                     hideTextOutput();
+                    hidePresetModal();
                 }
             });
             
