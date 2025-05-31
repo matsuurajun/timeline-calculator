@@ -105,12 +105,12 @@
                 return;
             }
             
-            // プリセットからブロックデータを復元
+            // セキュリティ: プリセットからブロックデータを復元（サニタイズ適用）
             blocksData = preset.blocks.map((block, index) => ({
                 id: `block_${Date.now()}_${index}`,
-                name: block.name,
-                duration_sec: block.duration_sec,
-                color_name: block.color_name
+                name: sanitizeString(block.name), // サニタイズ適用
+                duration_sec: Math.max(0, Math.floor(Number(block.duration_sec) || 0)), // 数値検証
+                color_name: COLOR_OPTIONS[block.color_name] ? block.color_name : DEFAULT_BLOCK_COLOR_NAME // 色名検証
             }));
             
             // カウンターを更新
@@ -118,11 +118,11 @@
             
             // UI更新
             updateAll();
-            window.hidePresetModal();
+            window.timelineApp.hidePresetModal();
             
             // 成功メッセージ
             setTimeout(() => {
-                alert(`「${preset.name}」を読み込みました。`);
+                alert(`「${sanitizeString(preset.name)}」を読み込みました。`);
             }, 100);
         }
 
@@ -139,7 +139,6 @@
         }
 
         function buildPresetList() {
-            console.log('buildPresetList called'); // デバッグ用
             const container = document.getElementById('presetList');
             
             if (!container) {
@@ -148,8 +147,6 @@
             }
             
             container.innerHTML = '';
-            
-            console.log('Saved presets:', savedPresets); // デバッグ用
             
             if (savedPresets.length === 0) {
                 const noPresets = document.createElement('div');
@@ -160,8 +157,6 @@
             }
             
             savedPresets.forEach((preset, index) => {
-                console.log(`Building preset ${index}:`, preset); // デバッグ用
-                
                 const item = document.createElement('div');
                 item.className = 'preset-item';
                 
@@ -170,11 +165,11 @@
                 
                 const name = document.createElement('div');
                 name.className = 'preset-name';
-                name.textContent = preset.name;
+                name.textContent = sanitizeString(preset.name);
                 
                 const details = document.createElement('div');
                 details.className = 'preset-details';
-                const totalSeconds = preset.blocks.reduce((sum, block) => sum + block.duration_sec, 0);
+                const totalSeconds = preset.blocks.reduce((sum, block) => sum + (block.duration_sec || 0), 0);
                 details.textContent = `${preset.blocks.length}ブロック | ${secondsToHHMMSS(totalSeconds)} | ${preset.createdAt}`;
                 
                 info.appendChild(name);
@@ -200,8 +195,6 @@
                 item.appendChild(actions);
                 container.appendChild(item);
             });
-            
-            console.log('Preset list built successfully'); // デバッグ用
         }
 
         body {
@@ -1068,14 +1061,14 @@
         <div class="preset-modal-content">
             <div class="preset-header">
                 <div class="preset-title">💾 プリセット管理</div>
-                <button class="close-btn" onclick="window.hidePresetModal()">&times;</button>
+                <button class="close-btn" onclick="window.timelineApp.hidePresetModal()">&times;</button>
             </div>
             
             <!-- 現在の構成を保存 -->
             <div class="save-preset-section">
                 <h4 style="margin-bottom: 10px; color: #374151;">現在の構成を保存</h4>
                 <input type="text" id="presetNameInput" class="preset-name-input" placeholder="プリセット名を入力（例：1時間番組、CM多め構成）" maxlength="30">
-                <button class="save-preset-btn" onclick="window.saveCurrentPreset()">💾 保存</button>
+                <button class="save-preset-btn" onclick="window.timelineApp.saveCurrentPreset()">💾 保存</button>
             </div>
             
             <!-- 保存済みプリセット一覧 -->
@@ -1123,45 +1116,164 @@
         const COLOR_NAMES = Object.keys(COLOR_OPTIONS);
         const DEFAULT_BLOCK_COLOR_NAME = "明るい空色";
 
-        // 初期データ
+        // セキュリティ: 入力サニタイゼーション（強化版）
+        function sanitizeString(str) {
+            if (typeof str !== 'string') return '';
+            // より厳密なサニタイゼーション
+            return str
+                .replace(/[<>&"']/g, function(match) {
+                    const map = {
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '&': '&amp;',
+                        '"': '&quot;',
+                        "'": '&#39;'
+                    };
+                    return map[match];
+                })
+                .replace(/javascript:/gi, '') // javascript: プロトコルを削除
+                .replace(/on\w+=/gi, '') // onイベント属性を削除
+                .substring(0, MAX_NAME_LENGTH);
+        }
+
+        // セキュリティ: 時刻入力の厳密な検証
+        function validateTimeInput(timeStr) {
+            if (typeof timeStr !== 'string') return false;
+            
+            // 厳密な時刻フォーマット検証 (HH:MM:SS)
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5]?[0-9]):([0-5]?[0-9])$/;
+            if (!timeRegex.test(timeStr)) return false;
+            
+            const parts = timeStr.split(':').map(Number);
+            const hours = parts[0];
+            const minutes = parts[1];
+            const seconds = parts[2];
+            
+            // 範囲チェック
+            if (hours < 0 || hours > 23) return false;
+            if (minutes < 0 || minutes > 59) return false;
+            if (seconds < 0 || seconds > 59) return false;
+            
+            return true;
+        }
+
+        // セキュリティ: ブロック名の安全な設定
+        function setBlockNameSafely(element, name) {
+            if (element && typeof name === 'string') {
+                element.textContent = sanitizeString(name);
+            }
+        }
+
+        // セキュリティ: 入力値の安全な設定
+        function setInputValueSafely(element, value) {
+            if (element && typeof value === 'string') {
+                element.value = sanitizeString(value);
+            }
+        }
+
+        // 時間変換ユーティリティ（セキュア版）
+        function hhmmssToSeconds(timeStr) {
+            if (!validateTimeInput(timeStr)) return 0;
+            const parts = timeStr.split(':').map(Number);
+            if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else if (parts.length === 2) {
+                return parts[0] * 60 + parts[1];
+            } else if (parts.length === 1) {
+                return parts[0];
+            }
+            return 0;
+        }
+
+        // セキュリティ: 時刻入力の厳密な検証
+        function validateTimeInput(timeStr) {
+            if (typeof timeStr !== 'string') return false;
+            
+            // 厳密な時刻フォーマット検証 (HH:MM:SS)
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5]?[0-9]):([0-5]?[0-9])$/;
+            if (!timeRegex.test(timeStr)) return false;
+            
+            const parts = timeStr.split(':').map(Number);
+            const hours = parts[0];
+            const minutes = parts[1];
+            const seconds = parts[2];
+            
+            // 範囲チェック
+            if (hours < 0 || hours > 23) return false;
+            if (minutes < 0 || minutes > 59) return false;
+            if (seconds < 0 || seconds > 59) return false;
+            
+            return true;
+        }
+
+        // セキュリティ: ブロック名の安全な設定
+        function setBlockNameSafely(element, name) {
+            if (element && typeof name === 'string') {
+                element.textContent = sanitizeString(name);
+            }
+        }
+
+        // セキュリティ: 入力値の安全な設定
+        function setInputValueSafely(element, value) {
+            if (element && typeof value === 'string') {
+                element.value = sanitizeString(value);
+            }
+        }
+
+        // 時間変換ユーティリティ（セキュア版）
+        function hhmmssToSeconds(timeStr) {
+            if (!validateTimeInput(timeStr)) return 0;
+            const parts = timeStr.split(':').map(Number);
+            if (parts.length === 3) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else if (parts.length === 2) {
+                return parts[0] * 60 + parts[1];
+            } else if (parts.length === 1) {
+                return parts[0];
+            }
+            return 0;
+        }
+
+        // 初期データ（セキュア）
         let blocksData = [
-            {id: "block_0", name: "VTR①", duration_sec: 540, color_name: "明るい空色"},
-            {id: "block_1", name: "CM①", duration_sec: 180, color_name: "ベージュ"},
-            {id: "block_2", name: "VTR②", duration_sec: 780, color_name: "明るい空色"},
-            {id: "block_3", name: "CM②", duration_sec: 180, color_name: "ベージュ"},
-            {id: "block_4", name: "VTR③", duration_sec: 660, color_name: "明るい空色"},
-            {id: "block_5", name: "CM③", duration_sec: 180, color_name: "ベージュ"},
-            {id: "block_6", name: "VTR④", duration_sec: 480, color_name: "明るい空色"}
+            {id: "block_0", name: sanitizeString("VTR①"), duration_sec: 540, color_name: "明るい空色"},
+            {id: "block_1", name: sanitizeString("CM①"), duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_2", name: sanitizeString("VTR②"), duration_sec: 780, color_name: "明るい空色"},
+            {id: "block_3", name: sanitizeString("CM②"), duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_4", name: sanitizeString("VTR③"), duration_sec: 660, color_name: "明るい空色"},
+            {id: "block_5", name: sanitizeString("CM③"), duration_sec: 180, color_name: "ベージュ"},
+            {id: "block_6", name: sanitizeString("VTR④"), duration_sec: 480, color_name: "明るい空色"}
         ];
+        let nextPresetIdCounter = 3;
 
         let nextBlockIdCounter = blocksData.length;
         let draggedElement = null;
         let draggedIndex = -1;
 
-        // プリセット管理
+        // プリセット管理データ（セキュア）
         let savedPresets = [
             {
                 id: "preset_default_1",
-                name: "標準1時間番組",
+                name: sanitizeString("標準1時間番組"),
                 blocks: [
-                    {name: "オープニング", duration_sec: 120, color_name: "明るい青緑"},
-                    {name: "VTR①", duration_sec: 900, color_name: "明るい空色"},
-                    {name: "CM①", duration_sec: 180, color_name: "ベージュ"},
-                    {name: "VTR②", duration_sec: 1200, color_name: "明るい空色"},
-                    {name: "CM②", duration_sec: 180, color_name: "ベージュ"},
-                    {name: "エンディング", duration_sec: 300, color_name: "明るい緑"}
+                    {name: sanitizeString("オープニング"), duration_sec: 120, color_name: "明るい青緑"},
+                    {name: sanitizeString("VTR①"), duration_sec: 900, color_name: "明るい空色"},
+                    {name: sanitizeString("CM①"), duration_sec: 180, color_name: "ベージュ"},
+                    {name: sanitizeString("VTR②"), duration_sec: 1200, color_name: "明るい空色"},
+                    {name: sanitizeString("CM②"), duration_sec: 180, color_name: "ベージュ"},
+                    {name: sanitizeString("エンディング"), duration_sec: 300, color_name: "明るい緑"}
                 ],
                 createdAt: new Date().toLocaleString('ja-JP')
             },
             {
                 id: "preset_default_2", 
-                name: "30分情報番組",
+                name: sanitizeString("30分情報番組"),
                 blocks: [
-                    {name: "ニュース①", duration_sec: 360, color_name: "明るいピンク"},
-                    {name: "CM", duration_sec: 180, color_name: "ベージュ"},
-                    {name: "特集", duration_sec: 720, color_name: "明るい空色"},
-                    {name: "CM", duration_sec: 180, color_name: "ベージュ"},
-                    {name: "ニュース②", duration_sec: 360, color_name: "明るいピンク"}
+                    {name: sanitizeString("ニュース①"), duration_sec: 360, color_name: "明るいピンク"},
+                    {name: sanitizeString("CM"), duration_sec: 180, color_name: "ベージュ"},
+                    {name: sanitizeString("特集"), duration_sec: 720, color_name: "明るい空色"},
+                    {name: sanitizeString("CM"), duration_sec: 180, color_name: "ベージュ"},
+                    {name: sanitizeString("ニュース②"), duration_sec: 360, color_name: "明るいピンク"}
                 ],
                 createdAt: new Date().toLocaleString('ja-JP')
             }
@@ -1361,9 +1473,10 @@
             console.log('Preset list built successfully'); // デバッグ用
         }
 
-        // セキュリティ: 入力サニタイゼーション
+        // セキュリティ: 入力サニタイゼーション（強化版）
         function sanitizeString(str) {
             if (typeof str !== 'string') return '';
+            // より厳密なサニタイゼーション
             return str
                 .replace(/[<>&"']/g, function(match) {
                     const map = {
@@ -1375,20 +1488,44 @@
                     };
                     return map[match];
                 })
+                .replace(/javascript:/gi, '') // javascript: プロトコルを削除
+                .replace(/on\w+=/gi, '') // onイベント属性を削除
                 .substring(0, MAX_NAME_LENGTH);
         }
 
-        // 時間変換ユーティリティ
-        function hhmmssToSeconds(timeStr) {
+        // セキュリティ: 時刻入力の厳密な検証
+        function validateTimeInput(timeStr) {
+            if (typeof timeStr !== 'string') return false;
+            
+            // 厳密な時刻フォーマット検証 (HH:MM:SS)
+            const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5]?[0-9]):([0-5]?[0-9])$/;
+            if (!timeRegex.test(timeStr)) return false;
+            
             const parts = timeStr.split(':').map(Number);
-            if (parts.length === 3) {
-                return parts[0] * 3600 + parts[1] * 60 + parts[2];
-            } else if (parts.length === 2) {
-                return parts[0] * 60 + parts[1];
-            } else if (parts.length === 1) {
-                return parts[0];
+            const hours = parts[0];
+            const minutes = parts[1];
+            const seconds = parts[2];
+            
+            // 範囲チェック
+            if (hours < 0 || hours > 23) return false;
+            if (minutes < 0 || minutes > 59) return false;
+            if (seconds < 0 || seconds > 59) return false;
+            
+            return true;
+        }
+
+        // セキュリティ: ブロック名の安全な設定
+        function setBlockNameSafely(element, name) {
+            if (element && typeof name === 'string') {
+                element.textContent = sanitizeString(name);
             }
-            return 0;
+        }
+
+        // セキュリティ: 入力値の安全な設定
+        function setInputValueSafely(element, value) {
+            if (element && typeof value === 'string') {
+                element.value = sanitizeString(value);
+            }
         }
 
         function secondsToHHMMSS(seconds) {
@@ -1428,44 +1565,131 @@
         // イベントハンドラー
         function onTargetTimeChange() {
             const input = document.getElementById('targetTime');
-            try {
-                const seconds = hhmmssToSeconds(input.value);
+            const value = input.value.trim();
+            
+            if (validateTimeInput(value)) {
+                const seconds = hhmmssToSeconds(value);
                 input.value = secondsToHHMMSS(seconds);
-            } catch {
+            } else {
                 input.value = "00:50:00";
+                // 不正な入力の警告（オプション）
+                console.warn('Invalid target time format:', value);
             }
             updateAll();
         }
 
+        // プリセット管理機能 - セキュアスコープ管理
+        (function() {
+            function showPresetModal() {
+                const modal = document.getElementById('presetModal');
+                if (!modal) {
+                    console.error('presetModal element not found');
+                    return;
+                }
+                
+                modal.style.display = 'block';
+                buildPresetList();
+                
+                const nameInput = document.getElementById('presetNameInput');
+                if (nameInput) {
+                    nameInput.value = '';
+                }
+                
+                modal.onclick = function(event) {
+                    if (event.target === modal) {
+                        hidePresetModal();
+                    }
+                };
+            }
+
+            function hidePresetModal() {
+                const modal = document.getElementById('presetModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+            }
+
+            function saveCurrentPreset() {
+                const nameInput = document.getElementById('presetNameInput');
+                const presetName = sanitizeString(nameInput.value.trim());
+                
+                if (!presetName) {
+                    alert('プリセット名を入力してください。');
+                    return;
+                }
+                
+                if (savedPresets.length >= MAX_PRESETS) {
+                    alert(`最大${MAX_PRESETS}個までしか保存できません。`);
+                    return;
+                }
+                
+                // セキュリティ: 現在のブロック構成をサニタイズして保存
+                const currentBlocks = blocksData.map(block => ({
+                    name: sanitizeString(block.name),
+                    duration_sec: Math.max(0, Math.floor(block.duration_sec || 0)),
+                    color_name: COLOR_OPTIONS[block.color_name] ? block.color_name : DEFAULT_BLOCK_COLOR_NAME
+                }));
+                
+                const newPreset = {
+                    id: `preset_${nextPresetIdCounter}`,
+                    name: presetName,
+                    blocks: currentBlocks,
+                    createdAt: new Date().toLocaleString('ja-JP')
+                };
+                
+                savedPresets.push(newPreset);
+                nextPresetIdCounter++;
+                
+                buildPresetList();
+                nameInput.value = '';
+                
+                // 成功フィードバック
+                const saveBtn = document.querySelector('.save-preset-btn');
+                if (saveBtn) {
+                    const originalText = saveBtn.textContent;
+                    saveBtn.textContent = '✅ 保存しました！';
+                    saveBtn.disabled = true;
+                    
+                    setTimeout(() => {
+                        saveBtn.textContent = originalText;
+                        saveBtn.disabled = false;
+                    }, 2000);
+                }
+            }
+
+            // 必要な関数のみをグローバルに公開
+            window.timelineApp = {
+                showPresetModal: showPresetModal,
+                hidePresetModal: hidePresetModal,
+                saveCurrentPreset: saveCurrentPreset
+            };
+        })();
+
         function onStartTimeChange() {
             const input = document.getElementById('startTime');
-            try {
-                const parts = input.value.split(':');
-                if (parts.length === 3) {
-                    const [hours, minutes, seconds] = parts.map(Number);
-                    if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59 && seconds >= 0 && seconds <= 59) {
-                        input.value = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                    } else {
-                        throw new Error();
-                    }
-                } else {
-                    throw new Error();
-                }
-            } catch {
+            const value = input.value.trim();
+            
+            if (validateTimeInput(value)) {
+                const parts = value.split(':').map(Number);
+                const [hours, minutes, seconds] = parts;
+                input.value = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } else {
                 input.value = "20:00:00";
+                console.warn('Invalid start time format:', value);
             }
             updateAll();
         }
 
         function onBlockNameChange(blockId, value) {
+            // セキュリティ: ブロック名をサニタイズ
             const sanitizedValue = sanitizeString(value);
             const block = blocksData.find(b => b.id === blockId);
             if (block) {
                 block.name = sanitizedValue;
-                // 入力フィールドも更新
+                // 入力フィールドも安全に更新
                 const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="name"]`);
                 if (input && input.value !== sanitizedValue) {
-                    input.value = sanitizedValue;
+                    setInputValueSafely(input, sanitizedValue);
                 }
                 updateAll();
             }
@@ -1474,18 +1698,21 @@
         function onBlockTimeChange(blockId, value) {
             const block = blocksData.find(b => b.id === blockId);
             if (block) {
-                try {
-                    const newSeconds = hhmmssToSeconds(value);
+                const trimmedValue = value.trim();
+                if (validateTimeInput(trimmedValue)) {
+                    const newSeconds = hhmmssToSeconds(trimmedValue);
                     block.duration_sec = newSeconds;
                     const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
                     if (input) {
                         input.value = secondsToHHMMSS(newSeconds);
                     }
-                } catch {
+                } else {
+                    // 不正な時刻フォーマットの場合、元の値に戻す
                     const input = document.querySelector(`input[data-block-id="${blockId}"][data-type="time"]`);
                     if (input) {
                         input.value = secondsToHHMMSS(block.duration_sec);
                     }
+                    console.warn('Invalid time format for block:', blockId, value);
                 }
                 updateAll();
             }
@@ -1517,6 +1744,7 @@
             const newBlockId = `block_${nextBlockIdCounter}`;
             nextBlockIdCounter++;
             
+            // セキュリティ: 新しいブロック名をサニタイズ
             const newBlock = {
                 id: newBlockId,
                 name: sanitizeString(`新しいブロック${nextBlockIdCounter}`),
@@ -1639,16 +1867,16 @@
                 const blockColorHex = COLOR_OPTIONS[block.color_name];
                 const textColor = getTextColor(blockColorHex);
 
-                // セキュア要素作成: createElementを使用
+                // セキュア要素作成: createElementを使用、textContentで安全に設定
                 const dragHandle = document.createElement('div');
                 dragHandle.className = 'drag-handle';
                 dragHandle.title = 'ドラッグして順序変更';
-                dragHandle.textContent = '⋮⋮';
+                dragHandle.textContent = '⋮⋮'; // 安全
 
                 const nameInput = document.createElement('input');
                 nameInput.type = 'text';
                 nameInput.className = 'block-name-input';
-                nameInput.value = block.name;
+                nameInput.value = block.name; // valueプロパティは安全
                 nameInput.maxLength = MAX_NAME_LENGTH;
                 nameInput.setAttribute('data-block-id', block.id);
                 nameInput.setAttribute('data-type', 'name');
@@ -1658,14 +1886,14 @@
                 colorButton.className = 'color-button';
                 colorButton.style.backgroundColor = blockColorHex;
                 colorButton.style.color = textColor;
-                colorButton.title = `色を変更: ${block.color_name}`;
-                colorButton.textContent = '🎨';
+                colorButton.title = `色を変更: ${block.color_name}`; // titleは自動エスケープされる
+                colorButton.textContent = '🎨'; // 安全
                 colorButton.addEventListener('click', () => onColorButtonClick(block.id));
 
                 const timeInput = document.createElement('input');
                 timeInput.type = 'text';
                 timeInput.className = 'time-input-small';
-                timeInput.value = secondsToHHMMSS(block.duration_sec);
+                timeInput.value = secondsToHHMMSS(block.duration_sec); // valueプロパティは安全
                 timeInput.style.backgroundColor = blockColorHex;
                 timeInput.style.color = textColor;
                 timeInput.maxLength = 8;
@@ -1675,7 +1903,7 @@
 
                 const deleteButton = document.createElement('button');
                 deleteButton.className = 'delete-btn';
-                deleteButton.textContent = '🗑️';
+                deleteButton.textContent = '🗑️'; // 安全
                 deleteButton.disabled = blocksData.length <= 1;
                 deleteButton.addEventListener('click', () => deleteBlock(block.id));
 
@@ -1840,13 +2068,13 @@
                 timeColor = '#d97706';
             }
 
-            // マーカー
+            // マーカー（安全）
             const markerElement = document.createElement('div');
             markerElement.className = 'timeline-marker';
             markerElement.style.color = isOver ? '#dc2626' : isShortage ? '#d97706' : 'inherit';
-            markerElement.textContent = marker;
+            markerElement.textContent = marker; // 安全
 
-            // コンテンツ
+            // コンテンツ（安全）
             const contentElement = document.createElement('div');
             contentElement.className = 'timeline-content';
             contentElement.style.backgroundColor = bgColor;
@@ -1861,27 +2089,27 @@
             nameElement.style.flex = '1';
             nameElement.style.overflow = 'hidden';
             nameElement.style.textOverflow = 'ellipsis';
-            nameElement.textContent = sanitizeString(name);
+            nameElement.textContent = sanitizeString(name); // セキュア: サニタイズ + textContent
 
             const durationElement = document.createElement('div');
             durationElement.style.fontSize = '13px';
             durationElement.style.fontWeight = 'bold';
-            durationElement.textContent = duration;
+            durationElement.textContent = duration; // 安全: 時刻文字列
 
             contentElement.appendChild(nameElement);
             contentElement.appendChild(durationElement);
 
-            // 時刻表示
+            // 時刻表示（安全）
             const timeElement = document.createElement('div');
             timeElement.className = 'timeline-time';
             timeElement.style.color = timeColor;
 
             const startTimeElement = document.createElement('div');
             startTimeElement.style.fontWeight = 'bold';
-            startTimeElement.textContent = startTime;
+            startTimeElement.textContent = startTime; // 安全: 時刻文字列
 
             const endTimeElement = document.createElement('div');
-            endTimeElement.textContent = endTime;
+            endTimeElement.textContent = endTime; // 安全: 時刻文字列
 
             timeElement.appendChild(startTimeElement);
             timeElement.appendChild(endTimeElement);
@@ -1889,7 +2117,7 @@
             if (isOver || isShortage) {
                 const statusElement = document.createElement('div');
                 statusElement.style.fontSize = '8px';
-                statusElement.textContent = isOver ? '超過' : '不足';
+                statusElement.textContent = isOver ? '超過' : '不足'; // 安全: 固定文字列
                 timeElement.appendChild(statusElement);
             }
 
@@ -2019,10 +2247,8 @@
             }
         }
 
-        // 初期化
+        // 初期化（セキュア版）
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, initializing app...'); // デバッグ用
-            
             const targetTimeInput = document.getElementById('targetTime');
             const startTimeInput = document.getElementById('startTime');
             const presetBtn = document.getElementById('presetBtn');
@@ -2037,20 +2263,18 @@
             
             // プリセットボタンのイベントリスナー
             if (presetBtn) {
-                console.log('Preset button found, adding event listener'); // デバッグ用
                 presetBtn.addEventListener('click', function() {
-                    console.log('Preset button clicked'); // デバッグ用
-                    window.showPresetModal();
+                    window.timelineApp.showPresetModal();
                 });
             } else {
-                console.error('Preset button not found'); // デバッグ用
+                console.error('Preset button not found');
             }
             
             // ESCキーでモーダルを閉じる
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'Escape') {
                     hideTextOutput();
-                    window.hidePresetModal();
+                    window.timelineApp.hidePresetModal();
                 }
             });
             
@@ -2064,7 +2288,6 @@
             });
             
             updateAll();
-            console.log('App initialization completed'); // デバッグ用
         });
     </script>
 </body>
